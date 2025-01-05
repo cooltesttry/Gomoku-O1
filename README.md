@@ -57,8 +57,8 @@ No additional third-party GUI libraries are required; the standard library `tkin
 
 1. **Clone the Repository**  
    ```bash
-   git clone https://github.com/cooltesttry/pyGomoku-chatGPTO1.git
-   cd pyGomoku-chatGPTO1
+   git clone https://github.com/cooltesttry/Gomoku-O1.git
+   cd Gomoku-O1
    ```
 
 2. **(Optional) Create a Virtual Environment**  
