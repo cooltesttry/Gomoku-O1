@@ -200,6 +200,6 @@ See the [LICENSE](LICENSE) file for details.
 
 ## Contact
 
-If you have any questions, suggestions, or feedback, feel free to open an [issue](https://github.com/cooltesttry/pyGomoku-chatGPTO1/issues)
+If you have any questions, suggestions, or feedback, feel free to open an [issue](https://github.com/cooltesttry/Gomoku-O1/issues)
 
 We hope you enjoy playing Gomoku with our AI and welcome any contributions you might make!
