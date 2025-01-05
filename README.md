@@ -2,6 +2,18 @@
 
 A **Python-based Gomoku (Five in a Row)** game with an MCTS-based AI. This Python project, created with ChatGPT o1 to explore the potential of o1 model, leverages **Tkinter** for the GUI, allowing you to play against an AI with selectable difficulty levels, switch languages on the fly, and experience additional features like undo, timers, and more.
 
+### Download the Windows Executable
+
+You can download the pre-built Windows executable of this program for easy setup and use. Simply click the link below to get started:
+
+**[Download Gomoku for Windows (EXE)](https://github.com/cooltesttry/Gomoku-O1/releases/download/Gomoku/Gomoku-O1.exe)**
+
+#### Instructions:
+
+1. Download the `.exe` file from the link above.
+2. Run the file to start the Gomoku game.
+3. Enjoy playing against AI with multiple difficulty levels or test your skills against friends.
+
 ![Gomoku Example Board](https://github.com/cooltesttry/Gomoku-O1/blob/main/screenshot.png)  
 
 
