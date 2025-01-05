@@ -1,0 +1,3 @@
+tkinter          # GUI library for creating the main interface
+pygame           # For sound effects or additional graphical components
+multiprocessing  # For multithreading and multiprocessing
