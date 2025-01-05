@@ -8,7 +8,7 @@ A **Python-based Gomoku (Five in a Row)** game with an MCTS-based AI. This proje
 
 You can download the pre-built Windows executable. Simply click the link below. Run the file to start the Gomoku game without setup.:
 
-**[Download Gomoku for Windows (EXE)](https://github.com/cooltesttry/Gomoku-O1/releases/download/Gomoku/GomokuO1.exe)**
+**[Download Gomoku for Windows (EXE)](https://github.com/cooltesttry/Gomoku-O1/releases/download/windows1.01/GomokuO1.exe)**
 
 **My Inner Journey**
 
