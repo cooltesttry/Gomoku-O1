@@ -10,6 +10,18 @@ import copy
 import math
 import threading
 import queue  # Use a thread-safe queue to communicate between threads
+import sys
+
+def resource_path(relative_path):
+    """获取资源文件的绝对路径"""
+    if hasattr(sys, '_MEIPASS'):
+        # 打包后运行
+        return os.path.join(sys._MEIPASS, relative_path)
+    else:
+        # 正常运行
+        current_directory = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(current_directory, relative_path)
+
 
 # ---------------------------
 # Global Constants
@@ -198,7 +210,7 @@ class Gomoku:
         """
         try:
             pygame.mixer.init()  # 初始化音频模块
-            self.sound = pygame.mixer.Sound("move_sound.mp3")  # 确保文件是有效的音频格式
+            self.sound = pygame.mixer.Sound(resource_path("move_sound.mp3"))  # 确保文件是有效的音频格式
         except Exception as e:
             print(f"Error playing sound: {e}")
 
