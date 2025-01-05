@@ -1,6 +1,6 @@
 # pyGomoku (Five in a Row)
 
-A **Python-based Gomoku (Five in a Row)** game with an MCTS-based AI. This project leverages **Tkinter** for the GUI, allowing you to play against an AI with selectable difficulty levels, switch languages on the fly, and experience additional features like undo, timers, and more.
+A **Python-based Gomoku (Five in a Row)** game with an MCTS-based AI. This Python project, created with ChatGPT o1 to explore the potential of o1 model, leverages **Tkinter** for the GUI, allowing you to play against an AI with selectable difficulty levels, switch languages on the fly, and experience additional features like undo, timers, and more.
 
 ![Gomoku Example Board (screenshot placeholder)](https://user-images.githubusercontent.com/xxx/placeholder.png)  
 *Example placeholder image. You can replace with an actual screenshot if desired.*
@@ -46,7 +46,7 @@ A **Python-based Gomoku (Five in a Row)** game with an MCTS-based AI. This proje
 
 ## Requirements
 
-- **Python 3.7+** (recommended 3.8 or above)  
+- **Python 3.10** 
 - **Tkinter** (usually included by default in most Python distributions)
 
 No additional third-party GUI libraries are required; the standard library `tkinter` is sufficient. However, the MCTS parallelization uses the [`multiprocessing`](https://docs.python.org/3/library/multiprocessing.html) module, which is also part of the Python standard library.
@@ -68,13 +68,6 @@ No additional third-party GUI libraries are required; the standard library `tkin
    # or
    venv\Scripts\activate     # On Windows
    ```
-
-3. **Install Dependencies**  
-   In most cases, the standard library is enough. If you need to install any missing dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-   *(If provided; otherwise, skip this step.)*
 
 ---
 
@@ -158,7 +151,6 @@ A possible structure (if the code is one file, you can list just that file):
 .
 ├── main.py                  # Main entry point for the Gomoku game
 ├── README.md                # Project documentation
-├── requirements.txt         # (Optional) Python dependencies
 └── LICENSE                  # Open-source license file
 ```
 
@@ -203,10 +195,6 @@ See the [LICENSE](LICENSE) file for details.
 
 ## Contact
 
-If you have any questions, suggestions, or feedback, feel free to open an [issue](https://github.com/YourUsername/YourGomokuRepo/issues) or contact the maintainer:
-
-- **Name**: Your Name  
-- **GitHub**: [@YourUsername](https://github.com/YourUsername)  
-- **Email**: your.email@example.com  
+If you have any questions, suggestions, or feedback, feel free to open an [issue](https://github.com/cooltesttry/pyGomoku-chatGPTO1/issues)
 
 We hope you enjoy playing Gomoku with our AI and welcome any contributions you might make!
