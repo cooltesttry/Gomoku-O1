@@ -14,8 +14,7 @@ You can download the pre-built Windows executable of this program for easy setup
 2. Run the file to start the Gomoku game.
 3. Enjoy playing against AI with multiple difficulty levels or test your skills against friends.
 
-![Gomoku Example Board](https://github.com/cooltesttry/Gomoku-O1/blob/main/screenshot.png)  
-
+<img src="https://github.com/cooltesttry/Gomoku-O1/blob/main/screenshot.png" alt="Gomoku Example Board" width="500"/>
 
 ## Table of Contents
 
