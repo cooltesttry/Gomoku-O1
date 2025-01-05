@@ -2,7 +2,7 @@
 
 A **Python-based Gomoku (Five in a Row)** game with an MCTS-based AI. This Python project, created with ChatGPT o1 to explore the potential of o1 model, leverages **Tkinter** for the GUI, allowing you to play against an AI with selectable difficulty levels, switch languages on the fly, and experience additional features like undo, timers, and more.
 
-![Gomoku Example Board](https://github.com/cooltesttry/pyGomoku-chatGPTO1/blob/main/screenshot.png)  
+![Gomoku Example Board](https://github.com/cooltesttry/Gomoku-O1/blob/main/screenshot.png)  
 
 
 ## Table of Contents
