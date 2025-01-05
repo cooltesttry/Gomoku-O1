@@ -187,6 +187,14 @@ A possible structure (if the code is one file, you can list just that file):
 
 ---
 
+## Packing
+  
+  ```bash
+  py -m PyInstaller --onefile --noconsole --icon=gomoku.png --add-data "move_sound.mp3;." main.py
+  ```
+
+---
+
 ## Contributing
 
 Contributions are welcome! If you’d like to help:
