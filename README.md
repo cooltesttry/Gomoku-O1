@@ -1,6 +1,6 @@
 # Gomoku-O1 (Five in a Row)
 
-A **Python-based Gomoku (Five in a Row)** game with an MCTS-based AI. This Python project, created with ChatGPT o1 to explore the potential of o1 model, leverages **Tkinter** for the GUI, allowing you to play against an AI with selectable difficulty levels, switch languages on the fly, and experience additional features like undo, timers, and more.
+A **Python-based Gomoku (Five in a Row)** game with an MCTS-based AI. This Python project, ALL done by ChatGPT o1, with about 40 round conversation within 3 hours, to explore the potential of o1 model, allowing you to play against an AI with selectable difficulty levels, switch languages on the fly, and experience additional features like undo, timers, and more. It would take me about a week to build similar project. When will ai replace human?
 
 ### Download the Windows Executable
 
