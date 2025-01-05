@@ -1,8 +1,11 @@
 import tkinter as tk
 from tkinter import messagebox
 import time
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool, cpu_count, freeze_support
 import random
+import os
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"  # Hide the pygame welcome message
+import pygame
 import copy
 import math
 import threading
@@ -62,7 +65,18 @@ class Gomoku:
                 "simple": "简单",
                 "medium": "中等",
                 "hard": "困难",
-            }
+            },
+            "about_title": "关于",
+            "about_message": (
+                "Gomoku (五子棋)\n\n"
+                "AI 五子棋 – 这是一个由 ChatGPT o1 创建的 Python 项目，"
+                "包含基于蒙特卡罗树搜索 (MCTS) 的 AI 和多语言支持。"
+                "通过此项目，我们旨在研究高级推理模型如何应对复杂的现实世界任务。"
+                "试试与 AI 进行一场策略性较量吧！\n\n"
+                "GitHub 仓库："
+            ),
+            "about_close": "关闭"
+
         },
         "en": {
             "title": "Gomoku",
@@ -89,7 +103,17 @@ class Gomoku:
                 "simple": "Easy",
                 "medium": "Medium",
                 "hard": "Hard",
-            }
+            },
+            "about_title": "About",
+            "about_message": (
+                "Gomoku (五子棋)\n\n"
+                "AI Five-in-a-Row – This Python project, created with ChatGPT o1, features MCTS-based AI, multi-language support. "
+                "Through this project, we aim to investigate how advanced reasoning models handle complex real world projects. "
+                "Try and enjoy a strategic match against the AI.\n\n"
+                "GitHub Repository:"
+            ),
+            "about_close": "Close"
+
         },
         "es": {
             "title": "Gomoku",
@@ -116,7 +140,17 @@ class Gomoku:
                 "simple": "Fácil",
                 "medium": "Medio",
                 "hard": "Difícil",
-            }
+            },
+            "about_title": "Acerca de",
+            "about_message": (
+                "Gomoku (五子棋)\n\n"
+                "AI Cinco en Línea – Este proyecto de Python, creado con ChatGPT o1, presenta una IA basada en MCTS y soporte multilingüe. "
+                "Con este proyecto, buscamos investigar cómo los modelos de razonamiento avanzado manejan tareas complejas del mundo real. "
+                "Prueba y disfruta de un partido estratégico contra la IA.\n\n"
+                "Repositorio de GitHub:"
+            ),
+            "about_close": "Cerrar"
+
         },
         "fr": {
             "title": "Gomoku",
@@ -143,7 +177,17 @@ class Gomoku:
                 "simple": "Facile",
                 "medium": "Moyen",
                 "hard": "Difficile",
-            }
+            },
+            "about_title": "À propos",
+            "about_message": (
+                "Gomoku (五子棋)\n\n"
+                "AI Cinq-en-Range – Ce projet Python, créé avec ChatGPT o1, propose une IA basée sur MCTS et un support multilingue. "
+                "À travers ce projet, nous cherchons à étudier comment les modèles de raisonnement avancé gèrent des tâches complexes dans le monde réel. "
+                "Essayez et profitez d'un match stratégique contre l'IA.\n\n"
+                "Dépôt GitHub:"
+            ),
+            "about_close": "Fermer"
+
         }
     }
 
@@ -152,6 +196,12 @@ class Gomoku:
         Constructor for the Gomoku class.
         Initializes the Tkinter window, game variables, and UI components.
         """
+        try:
+            pygame.mixer.init()  # 初始化音频模块
+            self.sound = pygame.mixer.Sound("move_sound.mp3")  # 确保文件是有效的音频格式
+        except Exception as e:
+            print(f"Error playing sound: {e}")
+
         self.root = root
         # Set default UI language to English
         self.current_language = "en"
@@ -179,8 +229,6 @@ class Gomoku:
         self.language_frame = tk.Frame(self.control_frame, bg="#F8F8F8")
         self.language_frame.pack(side="left")
 
-        tk.Label(self.language_frame, text="Lang:", bg="#F8F8F8").pack(side="left", padx=(0, 5))
-
         # Use StringVar to track the selected language
         self.selected_language = tk.StringVar(value=self.current_language)
         # Supported languages: Chinese, English, Spanish, French
@@ -196,7 +244,7 @@ class Gomoku:
                 activebackground="#E0E0E0",
                 selectcolor="#D0D0D0"
             )
-            rb.pack(side="left", padx=5)
+            rb.pack(side="left", padx=3)
 
         # 2. Buttons area: Restart, Undo, Difficulty
         self.button_frame = tk.Frame(self.control_frame, bg="#F8F8F8")
@@ -211,7 +259,7 @@ class Gomoku:
             activebackground="#D0D0D0",
             relief="groove"
         )
-        self.reset_button.pack(side="left", padx=5)
+        self.reset_button.pack(side="left", padx=3)
 
         # "Undo" button
         self.undo_button = tk.Button(
@@ -222,7 +270,7 @@ class Gomoku:
             activebackground="#D0D0D0",
             relief="groove"
         )
-        self.undo_button.pack(side="left", padx=5)
+        self.undo_button.pack(side="left", padx=3)
 
         # Difficulty selection button
         self.difficulty_button = tk.Button(
@@ -233,7 +281,20 @@ class Gomoku:
             activebackground="#D0D0D0",
             relief="groove"
         )
-        self.difficulty_button.pack(side="left", padx=5)
+        self.difficulty_button.pack(side="left", padx=3)
+
+        # "About" button
+        self.about_button = tk.Button(
+            self.button_frame,
+            text=self.t("about_title"),
+            command=self.show_about,
+            bg="#ECECEC",
+            activebackground="#D0D0D0",
+            relief="groove"
+        )
+        self.about_button.pack(side="left", padx=3)
+
+        
 
         # Create a status frame to show labels (current player, timers, etc.)
         self.status_frame = tk.Frame(root)
@@ -327,6 +388,7 @@ class Gomoku:
         self.root.title(self.t("title"))
         self.reset_button.config(text=self.t("reset_button"))
         self.undo_button.config(text=self.t("undo_button"))
+        self.about_button.config(text=self.t("about_title"))
         self.difficulty_button.config(text=self.get_difficulty_button_text())
 
         current_player = self.t("black_label") if self.current_turn == 'black' else self.t("white_label")
@@ -482,6 +544,57 @@ class Gomoku:
                 y = BOARD_PADDING + j * CELL_SIZE
                 self.canvas.create_oval(x - 3, y - 3, x + 3, y + 3, fill='black')
 
+
+    def show_about(self):
+        """
+        Show the About dialog with program information and a clickable GitHub link.
+        """
+        title = self.t("about_title")
+        message = self.t("about_message")
+        close_button_text = self.t("about_close")
+
+        about_window = tk.Toplevel(self.root)
+        about_window.title(title)
+        about_window.transient(self.root)
+        about_window.grab_set()
+
+        tk.Label(about_window, text=message, justify="left", wraplength=300,  # 设置自动换行宽度为 300 像素
+        font=("Arial", 10)).pack(pady=10, padx=15)
+
+        # Add clickable link
+        github_link = tk.Label(
+            about_window,
+            text="https://github.com/cooltesttry/Gomoku-O1",
+            fg="blue",
+            cursor="hand2",
+            font=("Arial", 10, "underline")
+        )
+        github_link.pack(pady=(0, 15))
+        github_link.bind("<Button-1>", lambda e: self.open_link("https://github.com/cooltesttry/Gomoku-O1"))
+
+        close_button = tk.Button(
+            about_window,
+            text= " " + close_button_text +" ",
+            command=about_window.destroy, 
+            bg="#ADD8E6",
+            activebackground="#D0D0D0",
+            font=("Arial", 10),
+            relief="groove"
+        )
+        close_button.pack(pady=(5, 15))
+        self.center_window(about_window, self.root)  # Center the window
+
+
+    def open_link(self, url):
+        """
+        Open the specified URL in the default web browser.
+        """
+        import webbrowser
+        webbrowser.open(url)
+
+
+    
+        
     def click_event(self, event):
         """
         Mouse click event on the board by the user.
@@ -503,6 +616,7 @@ class Gomoku:
             return
 
         # Place the player's stone
+        self.play_move_sound()
         self.place_stone(row, col, self.player)
         self.move_history.append((self.player, row, col))
         self.stop_timer()  # Stop the player's timer
@@ -547,6 +661,13 @@ class Gomoku:
         # Schedule next check
         self.root.after(100, self.process_ai_move)
 
+    def play_move_sound(self):
+        try:
+            self.sound.play()
+        except Exception as e:
+            print(f"Error playing sound: {e}")
+
+    
     def perform_ai_move(self, row, col):
         """
         Perform the AI's move (row, col) in the main thread, update GUI, check for win, etc.
@@ -555,6 +676,7 @@ class Gomoku:
             return
 
         # Place AI's stone
+        self.play_move_sound()
         self.place_stone(row, col, self.ai)
         self.move_history.append((self.ai, row, col))
         self.stop_timer()  # Stop the AI's timer
@@ -592,6 +714,7 @@ class Gomoku:
         x = BOARD_PADDING + col * CELL_SIZE
         y = BOARD_PADDING + row * CELL_SIZE
         self.draw_3d_stone(x, y, 'black' if player == 'black' else 'white')
+
 
     def draw_3d_stone(self, x, y, color):
         """
@@ -819,6 +942,7 @@ def mcts_search(board, ai_player, human_player, simulations, time_limit):
     )
 
     # Use multiprocessing to parallelize simulations
+
     with Pool(processes=cpu_count()) as pool:
         # Each simulation runs the 'simulate' function with the same root, players, and end_time
         results = pool.starmap(
@@ -1030,4 +1154,5 @@ def main():
 
 
 if __name__ == "__main__":
+    freeze_support()
     main()
