@@ -200,6 +200,41 @@ class Gomoku:
             ),
             "about_close": "Fermer"
 
+        },
+        "ja": {
+            "title": "五目並べ",
+            "reset_button": "再開",
+            "undo_button": "取り消し",
+            "difficulty_button": "難易度選択",
+            "difficulty_window_title": "AIの難易度を選択",
+            "difficulty_window_label": "AIの難易度を選択してください：",
+            "ok_button": "OK",
+            "current_player_prefix": "現在のプレイヤー: ",
+            "black_time_prefix": "黒の現在の時間: ",
+            "white_time_prefix": "白の現在の時間: ",
+            "choose_side_title": "駒を選択",
+            "choose_side_message": "先手（黒）でプレイしますか？",
+            "game_over_title": "ゲーム終了",
+            "game_over_win": "あなたの勝利です！",
+            "game_over_lose": "AIの勝利です！",
+            "no_undo_title": "情報",
+            "no_undo_message": "取り消せる手がありません。",
+            "game_end_no_undo_message": "ゲームは終了しています。取り消しはできません。",
+            "black_label": "黒",
+            "white_label": "白",
+            "difficulty_labels": {
+                "simple": "簡単",
+                "medium": "中級",
+                "hard": "難しい",
+            },
+            "about_title": "概要",
+            "about_message": (
+                "五目並べ\n\n"
+                "AI五目並べ - Pythonプロジェクト。MCTS（モンテカルロ木探索）を基盤としたAIと多言語サポートを特徴としています。"
+                "戦略的な試合を楽しんでください！\n\n"
+                "GitHubリポジトリ："
+            ),
+            "about_close": "閉じる"
         }
     }
 
@@ -235,7 +270,7 @@ class Gomoku:
 
         # Create a control frame to hold language selection and buttons
         self.control_frame = tk.Frame(root, bg="#F8F8F8")
-        self.control_frame.pack(fill="x", side="bottom", padx=10, pady=10)
+        self.control_frame.pack(fill="x", side="bottom", padx=5, pady=8)
 
         # 1. Language selection area
         self.language_frame = tk.Frame(self.control_frame, bg="#F8F8F8")
@@ -243,8 +278,8 @@ class Gomoku:
 
         # Use StringVar to track the selected language
         self.selected_language = tk.StringVar(value=self.current_language)
-        # Supported languages: Chinese, English, Spanish, French
-        languages = [("中文", "zh"), ("EN", "en"), ("ES", "es"), ("FR", "fr")]
+        # Supported languages: Chinese, English, Spanish, French, Japanese
+        languages = [("中文", "zh"), ("EN", "en"), ("ES", "es"), ("FR", "fr"), ("日本語", "ja")]
         for text, code in languages:
             rb = tk.Radiobutton(
                 self.language_frame,
@@ -256,7 +291,7 @@ class Gomoku:
                 activebackground="#E0E0E0",
                 selectcolor="#D0D0D0"
             )
-            rb.pack(side="left", padx=3)
+            rb.pack(side="left", padx=1)
 
         # 2. Buttons area: Restart, Undo, Difficulty
         self.button_frame = tk.Frame(self.control_frame, bg="#F8F8F8")
@@ -271,7 +306,7 @@ class Gomoku:
             activebackground="#D0D0D0",
             relief="groove"
         )
-        self.reset_button.pack(side="left", padx=3)
+        self.reset_button.pack(side="left", padx=1)
 
         # "Undo" button
         self.undo_button = tk.Button(
@@ -282,7 +317,7 @@ class Gomoku:
             activebackground="#D0D0D0",
             relief="groove"
         )
-        self.undo_button.pack(side="left", padx=3)
+        self.undo_button.pack(side="left", padx=1)
 
         # Difficulty selection button
         self.difficulty_button = tk.Button(
@@ -293,7 +328,7 @@ class Gomoku:
             activebackground="#D0D0D0",
             relief="groove"
         )
-        self.difficulty_button.pack(side="left", padx=3)
+        self.difficulty_button.pack(side="left", padx=1)
 
         # "About" button
         self.about_button = tk.Button(
@@ -304,7 +339,7 @@ class Gomoku:
             activebackground="#D0D0D0",
             relief="groove"
         )
-        self.about_button.pack(side="left", padx=3)
+        self.about_button.pack(side="left", padx=1)
 
         
 
