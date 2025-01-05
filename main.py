@@ -13,12 +13,12 @@ import queue  # Use a thread-safe queue to communicate between threads
 import sys
 
 def resource_path(relative_path):
-    """获取资源文件的绝对路径"""
+    """Get the absolute path of the resource file"""
     if hasattr(sys, '_MEIPASS'):
-        # 打包后运行
+        # Running after packaging
         return os.path.join(sys._MEIPASS, relative_path)
     else:
-        # 正常运行
+        # Running in normal mode
         current_directory = os.path.dirname(os.path.abspath(__file__))
         return os.path.join(current_directory, relative_path)
 
