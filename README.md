@@ -61,18 +61,18 @@ No additional third-party GUI libraries are required; the standard library `tkin
    cd Gomoku-O1
    ```
 
-2. Install the dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-3. **(Optional) Create a Virtual Environment**  
+2. **(Optional) Create a Virtual Environment**  
    ```bash
    python -m venv venv
    source venv/bin/activate  # On Linux/macOS
    # or
    venv\Scripts\activate     # On Windows
    ```
+
+3. Install the dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
 
 ---
 
