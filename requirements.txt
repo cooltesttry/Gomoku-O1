@@ -1,1 +1,2 @@
 pygame           # For sound effects or additional graphical components
+Pillow           # For image processing

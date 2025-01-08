@@ -1,21 +1,24 @@
-import tkinter as tk
-from tkinter import messagebox
-import time
-from multiprocessing import Pool, cpu_count, freeze_support
-import random
-import os
+import tkinter as tk  # Tkinter is a standard GUI library in Python
+from tkinter import messagebox  # Used for showing pop-up messages
+from PIL import Image, ImageTk  # PIL (Pillow) for image processing
+import time  # Used for time measurement, such as timers
+from multiprocessing import Pool, cpu_count, freeze_support  # Multiprocessing functionalities
+import random  # For random selection (e.g., random moves in MCTS)
+import os  # Used for operating system interactions, such as path handling
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"  # Hide the pygame welcome message
-import pygame
-import copy
-import math
-import threading
-import queue  # Use a thread-safe queue to communicate between threads
-import sys
+import pygame  # For playing sound effects
+import copy  # Used to deep copy Python objects (board states)
+import math  # Mathematical functions, e.g., for sqrt or log
+import threading  # For running AI computations in separate threads
+import queue  # A thread-safe queue to communicate between threads
+import sys  # Access to system-specific parameters and functions
 
 def resource_path(relative_path):
     """Get the absolute path of the resource file"""
+    # This function ensures that resource files (e.g., images, sounds) can be found
+    # whether the script is run directly or packaged (e.g., with PyInstaller).
     if hasattr(sys, '_MEIPASS'):
-        # Running after packaging
+        # If running after packaging, use the temporary _MEIPASS folder
         return os.path.join(sys._MEIPASS, relative_path)
     else:
         # Running in normal mode
@@ -28,27 +31,31 @@ def resource_path(relative_path):
 # ---------------------------
 
 BOARD_SIZE = 15  # The board is 15 x 15
-CELL_SIZE = 40   # Each cell is 40 pixels
-BOARD_PADDING = 20  # Padding (in pixels) around the board drawing
-STONE_RADIUS = 15   # Radius of the stone in pixels
+CELL_SIZE = 40   # Each cell in the board is 40 pixels
+BOARD_PADDING = 20  # Extra space around the board in pixels
+STONE_RADIUS = 15   # The radius of each stone in pixels
+BG_COLOR = None  # Background color for the main window (None = default)
 
-INF = float('inf')
+INF = float('inf')  # Infinity, used in MCTS for initialization
 
-# Difficulty settings: 'simple', 'medium', 'hard'
-# Each difficulty has a certain number of MCTS simulations and a time limit (in seconds)
+# Difficulty settings with MCTS-related parameters:
+# - 'simple': fewer simulations, lower time limit
+# - 'medium': moderate simulations, moderate time limit
+# - 'hard': large number of simulations, higher time limit
 DIFFICULTY_LEVELS = {
     'simple': {'simulations': 500, 'time_limit': 2},
-    'medium': {'simulations': 2000, 'time_limit': 7},
-    'hard': {'simulations': 10000, 'time_limit': 15},
+    'medium': {'simulations': 1200, 'time_limit': 7},
+    'hard': {'simulations': 4000, 'time_limit': 15},
 }
 
 
 class Gomoku:
     """
-    This is the main Gomoku class which handles:
-    - UI rendering (Tkinter)
-    - Game logic (player moves, AI moves, checking win condition, etc.)
-    - AI interaction (via MCTS)
+    Main Gomoku class that orchestrates:
+    - UI rendering (with Tkinter)
+    - Game logic (handling moves, undo, checking victory conditions)
+    - AI interaction (through MCTS in a background thread)
+    - Multi-language support for the interface
     """
     # Multi-language dictionary for user interface text
     translations = {
@@ -71,6 +78,7 @@ class Gomoku:
             "no_undo_title": "提示",
             "no_undo_message": "没有可以悔棋的步骤。",
             "game_end_no_undo_message": "游戏已结束，无法悔棋。",
+            "ai_turn_no_undo_message": "对手正在下棋时不能悔棋。",
             "black_label": "黑棋",
             "white_label": "白棋",
             "difficulty_labels": {
@@ -87,7 +95,9 @@ class Gomoku:
                 "试试与 AI 进行一场策略性较量吧！\n\n"
                 "GitHub 仓库："
             ),
-            "about_close": "关闭"
+            "about_close": "关闭",
+            "hint_button": "提示",
+            "no_hint_available": "目前没有可以显示的机会或威胁。"
 
         },
         "en": {
@@ -109,6 +119,7 @@ class Gomoku:
             "no_undo_title": "Info",
             "no_undo_message": "No move to undo.",
             "game_end_no_undo_message": "Game is over, cannot undo.",
+            "ai_turn_no_undo_message": "Cannot undo during opponent's turn.",
             "black_label": "Black",
             "white_label": "White",
             "difficulty_labels": {
@@ -124,8 +135,9 @@ class Gomoku:
                 "Try and enjoy a strategic match against the AI.\n\n"
                 "GitHub Repository:"
             ),
-            "about_close": "Close"
-
+            "about_close": "Close",
+            "hint_button": "Hints",
+            "no_hint_available": "No opportunities or threats to show at the moment."
         },
         "es": {
             "title": "Gomoku",
@@ -146,6 +158,7 @@ class Gomoku:
             "no_undo_title": "Información",
             "no_undo_message": "No hay movimientos para deshacer.",
             "game_end_no_undo_message": "El juego ha terminado, no se puede deshacer.",
+            "ai_turn_no_undo_message": "No se puede deshacer durante el turno del oponente.",
             "black_label": "Negro",
             "white_label": "Blanco",
             "difficulty_labels": {
@@ -161,8 +174,9 @@ class Gomoku:
                 "Prueba y disfruta de un partido estratégico contra la IA.\n\n"
                 "Repositorio de GitHub:"
             ),
-            "about_close": "Cerrar"
-
+            "about_close": "Cerrar",
+            "hint_button": "Sugerencias",
+            "no_hint_available": "No hay oportunidades ni amenazas para mostrar en este momento."
         },
         "fr": {
             "title": "Gomoku",
@@ -183,6 +197,7 @@ class Gomoku:
             "no_undo_title": "Info",
             "no_undo_message": "Aucun coup à annuler.",
             "game_end_no_undo_message": "La partie est terminée, impossible d'annuler.",
+            "ai_turn_no_undo_message": "Impossible d'annuler pendant le tour de l'adversaire.",
             "black_label": "Noir",
             "white_label": "Blanc",
             "difficulty_labels": {
@@ -198,6 +213,8 @@ class Gomoku:
                 "Essayez et profitez d'un match stratégique contre l'IA.\n\n"
                 "Dépôt GitHub:"
             ),
+            "hint_button": "Conseils",
+            "no_hint_available": "Aucune opportunité ou menace à afficher pour le moment.",
             "about_close": "Fermer"
 
         },
@@ -220,6 +237,7 @@ class Gomoku:
             "no_undo_title": "情報",
             "no_undo_message": "取り消せる手がありません。",
             "game_end_no_undo_message": "ゲームは終了しています。取り消しはできません。",
+            "ai_turn_no_undo_message": "相手のターン中に取り消しはできません。",
             "black_label": "黒",
             "white_label": "白",
             "difficulty_labels": {
@@ -234,7 +252,9 @@ class Gomoku:
                 "戦略的な試合を楽しんでください！\n\n"
                 "GitHubリポジトリ："
             ),
-            "about_close": "閉じる"
+            "about_close": "閉じる",
+            "hint_button": "ヒント",
+            "no_hint_available": "現在表示できるチャンスや脅威はありません。"
         }
     }
 
@@ -244,165 +264,195 @@ class Gomoku:
         Initializes the Tkinter window, game variables, and UI components.
         """
         try:
-            pygame.mixer.init()  # 初始化音频模块
-            self.sound = pygame.mixer.Sound(resource_path("move_sound.mp3"))  # 确保文件是有效的音频格式
+            pygame.mixer.init()  # Initialize the Pygame mixer for sound playback
+            self.sound = pygame.mixer.Sound(resource_path("move_sound.mp3"))  # Load move sound
         except Exception as e:
             print(f"Error playing sound: {e}")
 
         self.root = root
-        # Set default UI language to English
+        # Default UI language is set to English
         self.current_language = "en"
         # Default difficulty is set to "medium"
         self.current_difficulty = "medium"
 
-        # Set window title according to the current language
-        self.root.title(self.t("title"))
+        icon_path = "gomoku.png"  # Path to the game icon
+        icon_image = ImageTk.PhotoImage(Image.open(icon_path))
+        root.iconphoto(False, icon_image)  # Set the window icon
 
-        # Calculate total canvas size for the board
+        # Set the window title according to the current language
+        self.root.title(self.t("title"))
+        self.root.config(bg=BG_COLOR)  # Set background color if BG_COLOR is defined
+
+        # Calculate the total size of the canvas where the board will be drawn
         self.canvas_size = CELL_SIZE * (BOARD_SIZE - 1) + 2 * BOARD_PADDING
 
-        # Create the Tkinter Canvas for drawing the Gomoku board
+        # Create the Tkinter Canvas for drawing the board
         self.canvas = tk.Canvas(root, width=self.canvas_size, height=self.canvas_size, bg='#E0C9A5')
         self.canvas.pack()
 
-        # Bind a mouse click event on the board
+        # Bind the mouse click event to the click_event handler
         self.canvas.bind("<Button-1>", self.click_event)
 
-        # Create a control frame to hold language selection and buttons
-        self.control_frame = tk.Frame(root, bg="#F8F8F8")
-        self.control_frame.pack(fill="x", side="bottom", padx=5, pady=8)
+        # Create a control frame at the bottom of the main window
+        self.control_frame = tk.Frame(root, bg=BG_COLOR)
+        self.control_frame.pack(fill="x", side="bottom", padx=5, pady=3)
 
-        # 1. Language selection area
-        self.language_frame = tk.Frame(self.control_frame, bg="#F8F8F8")
-        self.language_frame.pack(side="left")
+        # First row: function buttons (Restart, Undo, Difficulty, About), centered
+        self.button_frame = tk.Frame(self.control_frame, bg=BG_COLOR)
+        self.button_frame.pack(side="top", pady=(0, 3))
 
-        # Use StringVar to track the selected language
+        # Inner frame to hold the buttons
+        self.button_frame_inner = tk.Frame(self.button_frame, bg=BG_COLOR)
+        self.button_frame_inner.pack(anchor="center")
+
+        # Restart button
+        self.reset_button = tk.Button(
+            self.button_frame_inner,
+            text=self.t("reset_button"),
+            command=self.reset_game,
+            bg=BG_COLOR,
+            activebackground="#D0D0D0",
+            relief="groove"
+        )
+        self.reset_button.pack(side="left", padx=5)
+
+        # Undo button
+        self.undo_button = tk.Button(
+            self.button_frame_inner,
+            text=self.t("undo_button"),
+            command=self.undo_move,
+            bg=BG_COLOR,
+            activebackground="#D0D0D0",
+            relief="groove"
+        )
+        self.undo_button.pack(side="left", padx=5)
+
+        # Difficulty button
+        self.difficulty_button = tk.Button(
+            self.button_frame_inner,
+            text=self.get_difficulty_button_text(),
+            command=self.select_difficulty,
+            bg=BG_COLOR,
+            activebackground="#D0D0D0",
+            relief="groove"
+        )
+        self.difficulty_button.pack(side="left", padx=5)
+
+        # List to store hint shape IDs, so we can clear them easily later
+        self.hint_shapes = []
+
+        # Hint button
+        self.hint_button = tk.Button(
+            self.button_frame_inner,
+            text=self.t("hint_button"),
+            command=self.show_hints,
+            bg=BG_COLOR,
+            relief="groove"
+        )
+        self.hint_button.pack(side="left", padx=5)
+
+        # About button
+        self.about_button = tk.Button(
+            self.button_frame_inner,
+            text=self.t("about_title"),
+            command=self.show_about,
+            bg=BG_COLOR,
+            activebackground="#D0D0D0",
+            relief="groove"
+        )
+        self.about_button.pack(side="left", padx=5)
+
+        # Second row: language selection, centered
+        self.language_frame = tk.Frame(self.control_frame, bg=BG_COLOR)
+        self.language_frame.pack(side="top", pady=(0, 3))
+
+        # Inner frame for radio buttons
+        self.language_frame_inner = tk.Frame(self.language_frame, bg=BG_COLOR)
+        self.language_frame_inner.pack(anchor="center")
+
+        # Radio buttons for language selection
         self.selected_language = tk.StringVar(value=self.current_language)
-        # Supported languages: Chinese, English, Spanish, French, Japanese
-        languages = [("中文", "zh"), ("EN", "en"), ("ES", "es"), ("FR", "fr"), ("日本語", "ja")]
+        languages = [
+            ("中文", "zh"), 
+            ("English", "en"), 
+            ("Español", "es"), 
+            ("Français", "fr"), 
+            ("日本語", "ja")
+        ]
         for text, code in languages:
             rb = tk.Radiobutton(
-                self.language_frame,
+                self.language_frame_inner,
                 text=text,
                 value=code,
                 variable=self.selected_language,
                 command=lambda c=code: self.set_language(c),
-                bg="#F8F8F8",
+                bg=BG_COLOR,
                 activebackground="#E0E0E0",
                 selectcolor="#D0D0D0"
             )
-            rb.pack(side="left", padx=1)
-
-        # 2. Buttons area: Restart, Undo, Difficulty
-        self.button_frame = tk.Frame(self.control_frame, bg="#F8F8F8")
-        self.button_frame.pack(side="right")
-
-        # "Restart" button
-        self.reset_button = tk.Button(
-            self.button_frame,
-            text=self.t("reset_button"),
-            command=self.reset_game,
-            bg="#ECECEC",
-            activebackground="#D0D0D0",
-            relief="groove"
-        )
-        self.reset_button.pack(side="left", padx=1)
-
-        # "Undo" button
-        self.undo_button = tk.Button(
-            self.button_frame,
-            text=self.t("undo_button"),
-            command=self.undo_move,
-            bg="#ECECEC",
-            activebackground="#D0D0D0",
-            relief="groove"
-        )
-        self.undo_button.pack(side="left", padx=1)
-
-        # Difficulty selection button
-        self.difficulty_button = tk.Button(
-            self.button_frame,
-            text=self.get_difficulty_button_text(),
-            command=self.select_difficulty,
-            bg="#ECECEC",
-            activebackground="#D0D0D0",
-            relief="groove"
-        )
-        self.difficulty_button.pack(side="left", padx=1)
-
-        # "About" button
-        self.about_button = tk.Button(
-            self.button_frame,
-            text=self.t("about_title"),
-            command=self.show_about,
-            bg="#ECECEC",
-            activebackground="#D0D0D0",
-            relief="groove"
-        )
-        self.about_button.pack(side="left", padx=1)
-
+            rb.pack(side="left", padx=5)
         
+        # Create a status frame for labeling current player, timers, etc.
+        self.status_frame = tk.Frame(root, bg=BG_COLOR)
+        self.status_frame.pack(pady=2)
 
-        # Create a status frame to show labels (current player, timers, etc.)
-        self.status_frame = tk.Frame(root)
-        self.status_frame.pack(pady=10)
-
-        # Show the current player's label (e.g., "Current Player: Black")
+        # Label to show current player (e.g., "Current Player: Black")
         self.current_player_label = tk.Label(
             self.status_frame,
             text=f"{self.t('current_player_prefix')}{self.t('black_label')}",
-            font=("Arial", 12)
+            font=("Arial", 12), bg=BG_COLOR
         )
         self.current_player_label.grid(row=0, column=0, padx=10)
 
-        # Player's timer (when player is black)
+        # Label to show player's timer (when playing black)
         self.player_timer_label = tk.Label(
             self.status_frame,
             text=f"{self.t('black_time_prefix')}00.00",
-            font=("Arial", 12)
+            font=("Arial", 12), bg=BG_COLOR
         )
         self.player_timer_label.grid(row=0, column=1, padx=10)
 
-        # AI's timer (when AI is white)
+        # Label to show AI's timer (when AI is white)
         self.ai_timer_label = tk.Label(
             self.status_frame,
             text=f"{self.t('white_time_prefix')}00.00",
-            font=("Arial", 12)
+            font=("Arial", 12), bg=BG_COLOR
         )
         self.ai_timer_label.grid(row=0, column=2, padx=10)
 
-        # For measuring the time used by the player or the AI
+        # Variables to measure the time for each side
         self.player_start_time = None
         self.ai_start_time = None
 
-        # Initialize the board as a 15x15 2D list, each cell can be 'black', 'white', or ''
+        # 15x15 board data structure: each cell can be 'black', 'white', or '' (empty)
         self.board = [['' for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
 
-        # game_over indicates if the game has ended
+        # Game over flag
         self.game_over = False
-        # current_turn stores whose turn it is: 'black' or 'white'
+        # Current turn: 'black' or 'white'
         self.current_turn = 'black'
-        # move_history is used for the "Undo" feature
+        # Move history for undo functionality
         self.move_history = []
-        # highlight is used to highlight the last move
+        # Highlight shape ID for the last move
         self.highlight = None
 
-        # Thread-safe queue to receive AI moves from a background thread
+        # A thread-safe queue for receiving AI moves
         self.ai_move_queue = queue.Queue()
 
-        # Set a timer in the main thread to process any incoming AI moves from the queue
+        # Schedule a regular check for AI moves in the main thread
         self.root.after(100, self.process_ai_move)
 
-        # Draw the initial empty board (grid lines, star points, etc.)
+        # Draw the empty board (lines, star points, etc.)
         self.draw_board()
 
-        # Set default difficulty parameters (MCTS simulations, time limit)
+        # Set default difficulty (MCTS simulations, time limit) based on current_difficulty
         self.set_default_difficulty()
 
-        # Center the main window on screen
+        # Ensure the main window is updated so geometry is correct, then center it
+        self.root.update_idletasks()
         self.center_main_window()
 
-        # Prompt the user to choose whether to play black or white
+        # Prompt the user to choose to play black or white
         self.choose_side()
 
     def t(self, key):
@@ -414,34 +464,88 @@ class Gomoku:
 
     def get_difficulty_button_text(self):
         """
-        Return the label text for the difficulty selection button.
-        For example: "Difficulty (Easy)" or "难度选择 (简单)"
+        Return the button text showing both the difficulty label and the translation.
         """
         diff_label = self.translations[self.current_language]["difficulty_labels"][self.current_difficulty]
         return f"{self.t('difficulty_button')} ({diff_label})"
 
+    def show_hints(self):
+        """
+        Show the next moves' opportunities (green circles) and threats (red markers).
+        - Uses get_hints(...) to detect patterns for the current player and the opponent.
+        - Draws markers on the canvas to indicate these hints.
+        """
+        # If it's not the player's turn, don't show hints
+        if self.current_turn != self.player:
+            return
+
+        # Clear previous hint markers first
+        self.hide_hints()
+
+        # Retrieve pattern info for current player and opponent
+        pattern_info = get_hints(self.board, self.current_turn, self.ai, self.player)
+        pattern_info_me = pattern_info[0]
+        pattern_info_opponent = pattern_info[1]
+        
+        # If no hints are available, show a message
+        if not pattern_info_me and not pattern_info_opponent:
+            messagebox.showinfo(self.t("hint_button"), self.t("no_hint_available"), parent=self.root)
+            return
+
+        # Draw green circles for opportunities
+        for ([r, c], value) in pattern_info_me:
+            x1, y1 = self.board_to_pixel(r, c)
+            shape_id = self.canvas.create_oval(
+                x1 - 15 * value, y1 - 15 * value,
+                x1 + 15 * value, y1 + 15 * value,
+                outline="#A3D9A5",
+                width=2
+            )
+            self.hint_shapes.append(shape_id)
+
+        # Draw red triangles for threats (opponent's opportunities)
+        for ([r, c], value) in pattern_info_opponent:
+            x1, y1 = self.board_to_pixel(r, c)
+            triangle_id = self.canvas.create_polygon(
+                x1, y1 - 17 * value,    # top vertex
+                x1 - 16 * value, y1 + 10 * value,  # left bottom
+                x1 + 16 * value, y1 + 10 * value,  # right bottom
+                fill="",
+                outline="#F5A3A3",
+                width=2
+            )
+            self.hint_shapes.append(triangle_id)
+
+    def hide_hints(self):
+        """
+        Remove all hint markers from the board.
+        """
+        for shape_id in self.hint_shapes:
+            self.canvas.delete(shape_id)
+        self.hint_shapes.clear()
+
     def set_language(self, lang_code):
         """
-        Switch the current UI language to `lang_code`, and update all UI text immediately.
+        Change the current UI language to lang_code and refresh UI texts.
         """
         self.current_language = lang_code
         self.update_ui_text()
 
     def update_ui_text(self):
         """
-        Re-apply the translated text to the window title, buttons, labels, etc.
-        This is called after changing the language.
+        Refresh the text of titles, buttons, labels, etc. to the currently selected language.
         """
         self.root.title(self.t("title"))
         self.reset_button.config(text=self.t("reset_button"))
         self.undo_button.config(text=self.t("undo_button"))
         self.about_button.config(text=self.t("about_title"))
         self.difficulty_button.config(text=self.get_difficulty_button_text())
+        self.hint_button.config(text=self.t("hint_button"))
 
         current_player = self.t("black_label") if self.current_turn == 'black' else self.t("white_label")
         self.current_player_label.config(text=f"{self.t('current_player_prefix')}{current_player}")
 
-        # If timers haven't started, reset to "00.00"
+        # If timers haven't started, display default time "00.00"
         if self.player_start_time is None:
             self.player_timer_label.config(text=f"{self.t('black_time_prefix')}00.00")
         if self.ai_start_time is None:
@@ -449,7 +553,7 @@ class Gomoku:
 
     def center_main_window(self):
         """
-        Move the main window to the center of the screen.
+        Place the main Tkinter window at the center of the screen.
         """
         self.root.update_idletasks()
         window_width = self.root.winfo_width()
@@ -479,14 +583,14 @@ class Gomoku:
 
     def set_default_difficulty(self):
         """
-        Based on the current difficulty key (e.g., "medium"), set the number of MCTS simulations and time limit.
+        Set the MCTS parameters (simulations, time limit) based on the current difficulty.
         """
         self.mcts_simulations = DIFFICULTY_LEVELS[self.current_difficulty]['simulations']
         self.time_limit = DIFFICULTY_LEVELS[self.current_difficulty]['time_limit']
 
     def select_difficulty(self):
         """
-        Pop up a window for the user to select a difficulty: simple, medium, hard.
+        Open a popup window to let the user select AI difficulty.
         """
         self.difficulty_window = tk.Toplevel(self.root)
         self.difficulty_window.title(self.t("difficulty_window_title"))
@@ -513,8 +617,7 @@ class Gomoku:
 
     def confirm_difficulty(self):
         """
-        Callback when the user confirms the chosen difficulty.
-        Updates the current difficulty and closes the popup window.
+        Callback for the difficulty selection. Updates current difficulty and closes the popup.
         """
         difficulty = self.selected_difficulty.get()
         self.current_difficulty = difficulty
@@ -524,11 +627,14 @@ class Gomoku:
 
     def choose_side(self):
         """
-        Ask the user: "Do you want to play first (Black)?"
-        If yes => player=black, AI=white
-        Otherwise => player=white, AI=black
-        Then, if AI goes first, start the AI computation in a background thread.
+        Ask the user: "Do you want to play first (Black)?" (Yes/No)
+        If yes => player is black, AI is white
+        If no => player is white, AI is black
+        If AI goes first, AI will make an initial move (usually center).
         """
+        self.root.update_idletasks()
+        self.center_main_window()
+
         answer = messagebox.askquestion(
             self.t("choose_side_title"),
             self.t("choose_side_message"),
@@ -546,14 +652,12 @@ class Gomoku:
             self.current_turn = self.ai
             self.update_status()
             self.start_timer()
+            # AI performs the first move if it's black (often center)
             self.perform_ai_move(BOARD_SIZE // 2, BOARD_SIZE // 2)
-            # If AI moves first, launch a background thread for AI computations
-            # threading.Thread(target=self.ai_move_thread, daemon=True).start()
-        
 
     def reset_game(self):
         """
-        Reset all game-related data and UI, then prompt for which side the user wants.
+        Reset the board state and UI, then prompt the user which side to play.
         """
         self.board = [['' for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
         self.canvas.delete("all")
@@ -572,20 +676,25 @@ class Gomoku:
 
     def draw_board(self):
         """
-        Draw the 15x15 grid lines and the "star points" on the board.
+        Draw the 15x15 board with horizontal/vertical lines and star points.
         """
+        # Draw horizontal and vertical lines
         for i in range(BOARD_SIZE):
             # Horizontal line
             self.canvas.create_line(
-                BOARD_PADDING, BOARD_PADDING + i * CELL_SIZE,
-                BOARD_PADDING + (BOARD_SIZE - 1) * CELL_SIZE, BOARD_PADDING + i * CELL_SIZE
+                BOARD_PADDING,
+                BOARD_PADDING + i * CELL_SIZE,
+                BOARD_PADDING + (BOARD_SIZE - 1) * CELL_SIZE,
+                BOARD_PADDING + i * CELL_SIZE
             )
             # Vertical line
             self.canvas.create_line(
-                BOARD_PADDING + i * CELL_SIZE, BOARD_PADDING,
-                BOARD_PADDING + i * CELL_SIZE, BOARD_PADDING + (BOARD_SIZE - 1) * CELL_SIZE
+                BOARD_PADDING + i * CELL_SIZE,
+                BOARD_PADDING,
+                BOARD_PADDING + i * CELL_SIZE,
+                BOARD_PADDING + (BOARD_SIZE - 1) * CELL_SIZE
             )
-        # Star points are commonly at (3,3), (3,7), (3,11), etc. for a 15x15 board
+        # Draw star points (3-3, 3-7, 3-11, etc.)
         star_points = [3, BOARD_SIZE // 2, BOARD_SIZE - 4]
         for i in star_points:
             for j in star_points:
@@ -593,10 +702,9 @@ class Gomoku:
                 y = BOARD_PADDING + j * CELL_SIZE
                 self.canvas.create_oval(x - 3, y - 3, x + 3, y + 3, fill='black')
 
-
     def show_about(self):
         """
-        Show the About dialog with program information and a clickable GitHub link.
+        Show a popup window with 'About' information and a GitHub link.
         """
         title = self.t("about_title")
         message = self.t("about_message")
@@ -607,10 +715,15 @@ class Gomoku:
         about_window.transient(self.root)
         about_window.grab_set()
 
-        tk.Label(about_window, text=message, justify="left", wraplength=300,  # 设置自动换行宽度为 300 像素
-        font=("Arial", 10)).pack(pady=10, padx=15)
+        tk.Label(
+            about_window,
+            text=message,
+            justify="left",
+            wraplength=300,
+            font=("Arial", 10)
+        ).pack(pady=10, padx=15)
 
-        # Add clickable link
+        # Clickable GitHub link
         github_link = tk.Label(
             about_window,
             text="https://github.com/cooltesttry/Gomoku-O1",
@@ -623,54 +736,52 @@ class Gomoku:
 
         close_button = tk.Button(
             about_window,
-            text= " " + close_button_text +" ",
-            command=about_window.destroy, 
+            text=" " + close_button_text + " ",
+            command=about_window.destroy,
             bg="#ADD8E6",
             activebackground="#D0D0D0",
             font=("Arial", 10),
             relief="groove"
         )
         close_button.pack(pady=(5, 15))
-        self.center_window(about_window, self.root)  # Center the window
-
+        self.center_window(about_window, self.root)
 
     def open_link(self, url):
         """
-        Open the specified URL in the default web browser.
+        Open the given URL in the default web browser.
         """
         import webbrowser
         webbrowser.open(url)
 
-
-    
-        
     def click_event(self, event):
         """
-        Mouse click event on the board by the user.
-        If it's the player's turn, place a stone at the clicked position (if valid).
-        Then check for a win, otherwise switch to AI turn.
+        Handle mouse click events on the board. 
+        If it's the player's turn, place the stone if valid, check for win, switch turn to AI.
         """
         if self.game_over:
             return
         if self.current_turn != self.player:
             return
 
+        # Hide existing hints once a move is made
+        self.hide_hints()
+
         x = event.x
         y = event.y
         row, col = self.get_nearest_point(x, y)
-        # If out of board range or already occupied, ignore
+        # If the click is out of range or cell is occupied, ignore
         if row < 0 or row >= BOARD_SIZE or col < 0 or col >= BOARD_SIZE:
             return
         if self.board[row][col] != '':
             return
 
-        # Place the player's stone
+        # Place the stone for the player
         self.play_move_sound()
         self.place_stone(row, col, self.player)
         self.move_history.append((self.player, row, col))
-        self.stop_timer()  # Stop the player's timer
+        self.stop_timer()
 
-        # Check if the player just won
+        # Check if the player has won
         if self.check_win(row, col, self.player):
             messagebox.showinfo(self.t("game_over_title"), self.t("game_over_win"), parent=self.root)
             self.game_over = True
@@ -682,12 +793,12 @@ class Gomoku:
         self.highlight_last_move()
         self.start_timer()
 
-        # Start a new thread for AI's move (computation only), no GUI calls in that thread
+        # Start a thread for AI computations (no GUI calls in that thread)
         self.root.after(100, lambda: threading.Thread(target=self.ai_move_thread, daemon=True).start())
 
     def ai_move_thread(self):
         """
-        Background thread for AI logic. Finds the best move, then puts that move into the queue.
+        Run the AI logic (MCTS) in a background thread, then put the resulting move into a queue.
         """
         move = self.find_best_move()
         if move:
@@ -695,40 +806,40 @@ class Gomoku:
 
     def process_ai_move(self):
         """
-        Main thread method: Check if there's a move in the AI queue.
-        If so, perform the AI move in the main thread (safe for Tkinter).
-        This function is called repeatedly by root.after(100, self.process_ai_move).
+        Repeatedly check if there is an AI move in the queue.
+        If so, execute it in the main thread (safe for Tkinter).
         """
         try:
             while True:
-                # get_nowait() raises queue.Empty if no item
                 move = self.ai_move_queue.get_nowait()
                 self.perform_ai_move(move[0], move[1])
         except queue.Empty:
             pass
 
-        # Schedule next check
+        # Schedule the next call
         self.root.after(100, self.process_ai_move)
 
     def play_move_sound(self):
+        """
+        Play a stone placement sound if available.
+        """
         try:
             self.sound.play()
         except Exception as e:
             print(f"Error playing sound: {e}")
 
-    
     def perform_ai_move(self, row, col):
         """
-        Perform the AI's move (row, col) in the main thread, update GUI, check for win, etc.
+        Execute the AI's move on the board, check for a win, then switch back to player.
         """
         if self.game_over:
             return
 
-        # Place AI's stone
+        # Place the AI's stone
         self.play_move_sound()
         self.place_stone(row, col, self.ai)
         self.move_history.append((self.ai, row, col))
-        self.stop_timer()  # Stop the AI's timer
+        self.stop_timer()
 
         # Check if AI wins
         if self.check_win(row, col, self.ai):
@@ -736,7 +847,7 @@ class Gomoku:
             self.game_over = True
             return
 
-        # Switch back to the player
+        # Switch turn to the player
         self.current_turn = self.player
         self.update_status()
         self.highlight_last_move()
@@ -744,8 +855,8 @@ class Gomoku:
 
     def get_nearest_point(self, x, y):
         """
-        Convert the (x, y) canvas coordinates to a (row, col) on the board.
-        If the click is too far from the center of a cell, return (-1, -1).
+        Convert the clicked canvas coordinates (x, y) to the nearest board cell (row, col).
+        If the click is not close enough to the grid center, return (-1, -1).
         """
         col = round((x - BOARD_PADDING) / CELL_SIZE)
         row = round((y - BOARD_PADDING) / CELL_SIZE)
@@ -757,20 +868,26 @@ class Gomoku:
 
     def place_stone(self, row, col, player):
         """
-        Place a stone on both the board data and the canvas.
+        Update the board data with the player's stone, then draw it on the canvas.
         """
         self.board[row][col] = player
-        x = BOARD_PADDING + col * CELL_SIZE
-        y = BOARD_PADDING + row * CELL_SIZE
+        x, y = self.board_to_pixel(row, col)
         self.draw_3d_stone(x, y, 'black' if player == 'black' else 'white')
 
+    def board_to_pixel(self, row, col):
+        """
+        Convert board coordinates (row, col) to pixel coordinates (x, y) on the canvas.
+        """
+        x = BOARD_PADDING + col * CELL_SIZE
+        y = BOARD_PADDING + row * CELL_SIZE
+        return (x, y)
 
     def draw_3d_stone(self, x, y, color):
         """
-        Draw a stone with a 3D effect on the canvas.
-        The 'color' parameter should be 'black' or 'white'.
+        Draw a stone with a slight 3D effect on the canvas.
+        'color' should be 'black' or 'white'.
         """
-        # Main stone body
+        # Draw the main stone circle
         self.canvas.create_oval(
             x - STONE_RADIUS, y - STONE_RADIUS,
             x + STONE_RADIUS, y + STONE_RADIUS,
@@ -778,7 +895,7 @@ class Gomoku:
             outline='',
             tags="stone"
         )
-        # Highlight area
+        # Highlight region for a 3D effect
         if color == 'black':
             highlight_color = '#AAAAAA'
         else:
@@ -790,8 +907,8 @@ class Gomoku:
             outline='',
             tags="stone"
         )
-        # Shadow area
-        shadow_color = '#555555' if color == 'black' else '#DDDDDD'
+        # Shadow region for a 3D effect
+        shadow_color = '#555555' if color == 'black' else '#E0E0E0'
         self.canvas.create_oval(
             x + STONE_RADIUS - 10, y + STONE_RADIUS - 10,
             x + STONE_RADIUS - 5, y + STONE_RADIUS - 5,
@@ -802,38 +919,37 @@ class Gomoku:
 
     def check_win(self, row, col, player):
         """
-        Check if placing a stone for 'player' at (row, col) results in 5 in a row.
-        Check horizontal, vertical, and two diagonal directions.
+        Check if placing 'player' stone at (row, col) results in a five-in-a-row (horizontal, vertical, diagonals).
         """
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
         for dr, dc in directions:
             count = 1
-            # Check in the "forward" direction
+            # Forward direction
             r, c = row + dr, col + dc
             while 0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE and self.board[r][c] == player:
                 count += 1
                 r += dr
                 c += dc
-            # Check in the "reverse" direction
+            # Reverse direction
             r, c = row - dr, col - dc
             while 0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE and self.board[r][c] == player:
                 count += 1
                 r -= dr
                 c -= dc
-            # If at least 5, it's a win
             if count >= 5:
                 return True
         return False
 
     def find_best_move(self):
         """
-        Use MCTS to find the best (row, col) move for the AI.
+        Perform the MCTS search to find the best move for the AI.
+        Returns the (row, col) of the best move.
         """
         return mcts_search(self.board, self.ai, self.player, self.mcts_simulations, self.time_limit)
 
     def undo_move(self):
         """
-        Undo the last two moves (AI + player) if possible, unless the game is over.
+        Undo the last two moves (AI + player) if possible, as long as the game isn't over and it's player's turn.
         """
         if not self.move_history:
             messagebox.showinfo(self.t("no_undo_title"), self.t("no_undo_message"), parent=self.root)
@@ -842,16 +958,16 @@ class Gomoku:
             messagebox.showinfo(self.t("no_undo_title"), self.t("game_end_no_undo_message"), parent=self.root)
             return
         if self.current_turn != self.player:
-            messagebox.showinfo(self.t("no_undo_title"), "对手正在下棋时不能悔棋", parent=self.root)
+            messagebox.showinfo(self.t("no_undo_title"), self.t("ai_turn_no_undo_message"), parent=self.root)
             return
 
-        # Remove the last move
+        # Remove the last move from history
         last_player, row, col = self.move_history.pop()
         self.board[row][col] = ''
         self.redraw_board()
         self.highlight_last_move()
 
-        # If that was the AI's move, also remove the player's move
+        # If the last move was AI's move, also remove the player's previous move
         if last_player == self.ai and self.move_history:
             last_player, row, col = self.move_history.pop()
             self.board[row][col] = ''
@@ -865,7 +981,7 @@ class Gomoku:
 
     def redraw_board(self):
         """
-        Clear all stones from the canvas and redraw them according to self.board.
+        Clear the stones from the canvas and redraw them based on the self.board data.
         """
         self.canvas.delete("stone")
         self.canvas.delete("highlight")
@@ -879,7 +995,7 @@ class Gomoku:
 
     def highlight_last_move(self):
         """
-        Draw a red highlight around the most recent move.
+        Draw a red circle (highlight) around the last placed stone.
         """
         if self.highlight:
             self.canvas.delete(self.highlight)
@@ -897,14 +1013,14 @@ class Gomoku:
 
     def update_status(self):
         """
-        Update the label to show whose turn it is.
+        Update the status label to display the current player's turn.
         """
         current_player = self.t("black_label") if self.current_turn == 'black' else self.t("white_label")
         self.current_player_label.config(text=f"{self.t('current_player_prefix')}{current_player}")
 
     def start_timer(self):
         """
-        Start (or resume) the timer for whichever side's turn it is: player or AI.
+        Start or resume the timer for the side whose turn it is (player or AI).
         """
         if self.current_turn == self.player:
             self.player_start_time = time.time()
@@ -915,7 +1031,7 @@ class Gomoku:
 
     def stop_timer(self):
         """
-        Stop the currently running timer (player or AI) and update the label with the elapsed time.
+        Stop the timer for the side whose turn just ended.
         """
         if self.current_turn == self.player and self.player_start_time:
             elapsed = time.time() - self.player_start_time
@@ -928,7 +1044,7 @@ class Gomoku:
 
     def reset_timers(self):
         """
-        Reset both timers to "00.00" and clear start times.
+        Reset both player and AI timers to default "00.00".
         """
         self.player_start_time = None
         self.ai_start_time = None
@@ -937,7 +1053,7 @@ class Gomoku:
 
     def update_player_timer(self):
         """
-        Continuously update the player's timer every 100ms while it is running.
+        Continuously update the player's timer if it is running.
         """
         if self.player_start_time:
             elapsed = time.time() - self.player_start_time
@@ -948,7 +1064,7 @@ class Gomoku:
 
     def update_ai_timer(self):
         """
-        Continuously update the AI's timer every 100ms while it is running.
+        Continuously update the AI's timer if it is running.
         """
         if self.ai_start_time:
             elapsed = time.time() - self.ai_start_time
@@ -959,8 +1075,7 @@ class Gomoku:
 
     def format_time(self, seconds):
         """
-        Convert a time in seconds to a string like "SS.mm".
-        Only shows seconds and two decimal places for milliseconds.
+        Convert a time in seconds to a string "SS.mm" (seconds + 2 decimal places).
         """
         mins = int(seconds) // 60
         secs = int(seconds) % 60
@@ -974,13 +1089,12 @@ class Gomoku:
 
 def mcts_search(board, ai_player, human_player, simulations, time_limit):
     """
-    Main entry for the Monte Carlo Tree Search.
-    :param board: 2D list (15x15) representing the current board state
-    :param ai_player: 'black' or 'white' representing the AI's color
-    :param human_player: 'black' or 'white' representing the human's color
-    :param simulations: number of MCTS simulations to run
-    :param time_limit: max time (in seconds) for the MCTS
-    :return: The best move (row, col) for the AI
+    Main entry point for the Monte Carlo Tree Search. Returns the best move (row, col).
+    :param board: A 15x15 list of lists representing the board state
+    :param ai_player: 'black' or 'white'
+    :param human_player: 'black' or 'white'
+    :param simulations: Number of MCTS simulations
+    :param time_limit: Time limit for the MCTS (in seconds)
     """
     start_time = time.time()
     end_time = start_time + time_limit
@@ -993,74 +1107,77 @@ def mcts_search(board, ai_player, human_player, simulations, time_limit):
         human_player=human_player
     )
 
-    # Use multiprocessing to parallelize simulations
-
+    # Use multiprocessing for parallel MCTS simulations
     with Pool(processes=cpu_count()) as pool:
-        # Each simulation runs the 'simulate' function with the same root, players, and end_time
+        # Map each simulation to the 'simulate' function with the same root info
         results = pool.starmap(
             simulate,
             [(root, ai_player, human_player, end_time) for _ in range(simulations)]
         )
 
-    # Tally how many times each move was returned from simulations
+    # Collect move statistics
     move_scores = {}
     for move in results:
         if move is not None:
             move_scores[move] = move_scores.get(move, 0) + 1
 
-
+    # Get all possible moves
     possible_moves = get_possible_moves(board)
 
+    # Check for forced moves (e.g. immediate winning or blocking)
     force_moves = get_forced_moves(board, possible_moves, ai_player, ai_player, human_player)
     if force_moves:
+        # If there are forced moves and no moves in move_scores, pick one
         if not move_scores:
             return random.choice(force_moves)
+        # Otherwise pick the forced move with highest frequency
         force_scores = {}
         for move in force_moves:
-            force_scores[move] = move_scores.get(move,0)
+            force_scores[move] = move_scores.get(move, 0)
             best_move = max(force_scores, key=force_scores.get)
         return best_move
-    # If no moves found by MCTS (very rare) or no expansions, pick a random valid move
+
+    # If MCTS did not yield any expansions (very rare), pick a random move
     if not move_scores:
         return random.choice(possible_moves)
-   # Otherwise choose the move that appeared the most in the simulations
+
+    # Otherwise, choose the move that was most frequent in the simulations
     best_move = max(move_scores, key=move_scores.get)
     return best_move
 
 
 class MCTSNode:
     """
-    A node in the MCTS tree. Stores a board state, the player to move, and statistics.
+    A node representing a state in the MCTS tree.
+    Holds board data, player info, and statistics like wins/visits.
     """
     def __init__(self, board, player, ai_player, human_player, move=None, parent=None):
-        self.board = board                # The 15x15 board state
-        self.player = player              # Which player is to move at this node
+        self.board = board                # 15x15 board state
+        self.player = player              # Which player to move at this node
         self.ai_player = ai_player
         self.human_player = human_player
         self.move = move                  # The move (row, col) that led to this node
         self.parent = parent
-        self.children = {}                # A dict of move -> MCTSNode
-        self.wins = 0                     # Accumulated wins (for the AI) during backpropagation
-        self.visits = 0                   # Number of times this node is visited
+        self.children = {}                # A dictionary of move -> MCTSNode
+        self.wins = 0                     # Accumulated wins (for AI) during backprop
+        self.visits = 0                   # Number of visits for this node
 
     def is_fully_expanded(self):
         """
-        Check if this node has expanded all possible moves (children).
+        Return True if all possible moves from this board state have been expanded.
         """
         return len(self.children) == len(get_possible_moves(self.board))
 
     def best_child(self, c_param=1.414):
         """
-        Use the UCB (Upper Confidence Bound) formula to select the best child:
-        score = exploitation + exploration
-               = (child.wins / child.visits) + c_param * sqrt(log(self.visits) / child.visits)
-        c_param is typically sqrt(2).
+        Select the best child node using UCB (Upper Confidence Bound):
+        UCB = (child.wins / child.visits) + c_param * sqrt( (ln(self.visits)) / child.visits )
         """
         best_score = -INF
         best_move = None
         for move, child in self.children.items():
             if child.visits == 0:
-                # If the child has 0 visits, it might be prioritized automatically
+                # If child is unvisited, return it immediately
                 return child
             exploitation = child.wins / child.visits
             exploration = c_param * math.sqrt(math.log(self.visits) / child.visits)
@@ -1073,12 +1190,12 @@ class MCTSNode:
 
 def simulate(node, ai_player, human_player, end_time):
     """
-    One complete MCTS simulation:
-    1) Selection: Follow best_child() down the tree until we reach a node that isn't fully expanded
-    2) Expansion: Create a new child from a random possible move
-    3) Simulation: Play moves randomly until there's a winner or time is up
-    4) Backpropagation: Update the visited nodes with wins/visits
-    Return the move that was selected in the expansion step (or None if none).
+    Execute one simulation of MCTS:
+    1. SELECTION: Move down the tree using best_child() until a non-full node is found
+    2. EXPANSION: Create a new child node with a random feasible move
+    3. SIMULATION (Playout): Play out random moves until a result or time is up
+    4. BACKPROPAGATION: Update nodes with the result of the simulation
+    Returns the move that was expanded in this simulation (None if none).
     """
     current_node = node
     board = copy.deepcopy(node.board)
@@ -1088,9 +1205,8 @@ def simulate(node, ai_player, human_player, end_time):
     while current_node.is_fully_expanded() and current_node.children:
         current_node = current_node.best_child()
         if current_node and current_node.move:
-            # Apply the move
             board[current_node.move[0]][current_node.move[1]] = current_node.player
-            # Toggle the player between ai_player and human_player
+            # Switch player
             player = ai_player if current_node.player == human_player else human_player
         else:
             break
@@ -1098,14 +1214,12 @@ def simulate(node, ai_player, human_player, end_time):
     # 2) EXPANSION
     possible_moves = get_possible_moves(board)
     if possible_moves and current_node:
-        # Prioritize forced moves
         forced_moves = get_forced_moves(board, possible_moves, player, ai_player, human_player)
         if forced_moves:
             move = random.choice(forced_moves)
         else:
             move = random.choice(possible_moves)
 
-        #move = random.choice(possible_moves)
         board[move[0]][move[1]] = player
         child_node = MCTSNode(
             board=copy.deepcopy(board),
@@ -1120,10 +1234,10 @@ def simulate(node, ai_player, human_player, end_time):
     else:
         move = None
 
-    # 3) SIMULATION (random playout)
+    # 3) SIMULATION (random playout) until winner or time
     winner = None
     while True:
-        # Check if there's a winner after the last move
+        # Check if the last move caused a win for AI/human
         if move is not None and check_win(board, move, ai_player):
             winner = ai_player
             break
@@ -1131,17 +1245,16 @@ def simulate(node, ai_player, human_player, end_time):
             winner = human_player
             break
 
-        # If no more moves left, it's a draw
+        # If no more moves, it's a draw
         possible_moves = get_possible_moves(board)
         if not possible_moves:
             break
 
-        # Randomly pick the next move
+        # Choose a random move
         move = random.choice(possible_moves)
-
         board[move[0]][move[1]] = player
 
-        # Check again if there's a winner
+        # Check winner
         if check_win(board, move, player):
             winner = player
             break
@@ -1149,7 +1262,7 @@ def simulate(node, ai_player, human_player, end_time):
         # Switch player
         player = ai_player if player == human_player else human_player
 
-        # If time is exceeded, break early
+        # Time check
         if time.time() > end_time:
             break
 
@@ -1167,8 +1280,8 @@ def simulate(node, ai_player, human_player, end_time):
 
 def check_win(board, move, player):
     """
-    Check if placing 'player' at 'move' (row, col) results in 5 in a row.
-    For MCTS simulation usage.
+    Check if the 'player' has won by placing a stone at 'move' (row, col).
+    Used in MCTS simulations (no GUI).
     """
     if move is None:
         return False
@@ -1195,30 +1308,68 @@ def check_win(board, move, player):
 
 def get_possible_moves(board):
     """
-    Return all "reasonable" empty positions on the board, i.e., positions
-    within 2 cells of any existing stone. If the board is empty, return the center position.
+    Return all 'reasonable' empty positions (within 2 cells of an existing stone).
+    If the board is empty, return the center position (start move).
     """
     moves = set()
     for row in range(BOARD_SIZE):
         for col in range(BOARD_SIZE):
             if board[row][col] != '':
-                # For each occupied cell, consider empty cells within a 2-cell radius
+                # For each occupied cell, add empty cells in a 2-cell radius to 'moves'
                 for dr in range(-2, 3):
                     for dc in range(-2, 3):
                         r, c = row + dr, col + dc
                         if 0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE and board[r][c] == '':
                             moves.add((r, c))
-    # If the board is totally empty, just return the center
     if not moves:
         return [(BOARD_SIZE // 2, BOARD_SIZE // 2)]
     return list(moves)
 
+
+def get_hints(board, player, ai_player, human_player):
+    """
+    Analyze the board to find 'hints' for the current player:
+    - Opportunities for the current player
+    - Threats from the opponent
+    The function returns a list [player_hints, opponent_hints].
+    Each item is a list of tuples ([row, col], value), where 'value' scales the marker size.
+    """
+    player_hints = []
+    opponent_hints = []
+    possible_move = get_possible_moves(board)
+    opponent = human_player if player == ai_player else ai_player
+    for move in possible_move:
+        r, c = move
+        # Temporarily place player's stone
+        board[r][c] = player
+        patterns = count_patterns(board, r, c, player)
+        threats = patterns["five_in_a_row"] + patterns["open_four"] + patterns["open_four_with_gap"] + patterns["open_three"] + patterns["open_three_with_gap"]
+        # If we detect strong patterns, record them as opportunities
+        if threats > 0:
+            # 'value' determines the size of the marker
+            player_hints.append([move, 1 if patterns["five_in_a_row"] + patterns["open_four"] > 0 or threats + patterns["closed_four"] > 1 else 0.6])
+        board[r][c] = ''
+
+        # Temporarily place opponent's stone
+        board[r][c] = opponent
+        patterns = count_patterns(board, r, c, opponent)
+        # If the opponent has strong patterns, we consider them threats
+        if patterns['threat_4'] + patterns['threat_3'] > 1 or patterns['open_four'] > 0 or patterns["five_in_a_row"] > 0:
+            opponent_hints.append([move, 1])
+        elif patterns['open_three'] > 0:
+            opponent_hints.append([move, 0.6])
+        board[r][c] = ''
+    return [player_hints, opponent_hints]
+
+
 def get_forced_moves(board, amoves, player, ai_player, human_player):
     """
-    Detect if there are any forced moves (like blocking opponent's FOUR or forming FIVE).
-    Returns a list of such critical moves.
+    Identify forced moves such as:
+    - immediate win
+    - blocking opponent's immediate win
+    - creating or blocking four-in-a-row
+    Returns a list of forced moves.
     """
-    
     forced_moves = []
     me_moves = []
     me_4 = []
@@ -1227,16 +1378,17 @@ def get_forced_moves(board, amoves, player, ai_player, human_player):
     for move in amoves:
         r, c = move
         board[r][c] = player
-        if check_win(board, move, player):
+        patterns = count_patterns(board, r, c, player)
+        # If this move gives immediate five-in-a-row, return immediately
+        if patterns['five_in_a_row'] > 0:
             board[r][c] = ''
             return (move,)
         else:
-            # Additionally, check if player can create an OPEN FOUR or CLOSED FOUR
-            patterns = count_patterns(board, r, c, player)
+            # Check for open_four, threat_4, threat_3, etc.
             if patterns['threat_4'] > 0:
                 me_4.append(move)
             if patterns['threat_3'] > 0:
-                me_3.append(move)           
+                me_3.append(move)
             if patterns['open_four'] > 0:
                 me_moves.append(move)
             elif patterns['threat_4'] + patterns['threat_3'] > 1:
@@ -1245,13 +1397,13 @@ def get_forced_moves(board, amoves, player, ai_player, human_player):
     
     for move in amoves:
         r, c = move
-        # Simulate opponent making this move to see if it creates a FIVE
+        # Simulate opponent's move
         board[r][c] = opponent
-        if check_win(board, move, opponent):
+        patterns = count_patterns(board, r, c, opponent)
+        if patterns['five_in_a_row'] > 0:
             return (move,)
         else:
-            # Additionally, check if opponent can create an OPEN FOUR or CLOSED FOUR
-            patterns = count_patterns(board, r, c, opponent)
+            # If opponent can form open_four or multiple threats, add to forced moves
             if patterns['open_four'] > 0:
                 forced_moves.append(move)
                 forced_moves += me_4
@@ -1262,7 +1414,6 @@ def get_forced_moves(board, amoves, player, ai_player, human_player):
                 else:
                     forced_moves.append(move)
                     forced_moves += me_4 + me_3
- 
         board[r][c] = ''
     if me_moves:
         return list(set(me_moves))
@@ -1271,23 +1422,10 @@ def get_forced_moves(board, amoves, player, ai_player, human_player):
 
 def count_patterns(board, row, col, player):
     """
-    统计指定位置（row, col）处玩家的各种棋形（如连珠、活四、冲四、活三、冲三等）。
-    该函数不仅统计连续的棋子，还能识别中间有一个空位的复杂棋形，并判断两端的开放性。
-    
-    返回：
-        {
-            'total_score': int,                  # 总评分
-            'five_in_a_row': int,                # 五连
-            'open_four': int,                    # 活四
-            'closed_four': int,                  # 冲四
-            'open_four_with_gap': int,           # 带间隙的活四
-            'open_three': int,                   # 活三
-            'closed_three': int,                 # 冲三
-            'open_three_with_gap': int,          # 带间隙的活三
-            'closed_three_with_gap': int         # 带间隙的冲三
-        }
+    Count various pattern types (five-in-a-row, open four, closed four, etc.)
+    around the position (row, col) for the given 'player'.
+    This function returns a dictionary with the pattern counts.
     """
-    # 初始化评分和各种棋形的计数
     pattern_counts = {
         'total_score': 0,
         'five_in_a_row': 0,
@@ -1300,80 +1438,70 @@ def count_patterns(board, row, col, player):
         'closed_three_with_gap': 0
     }
 
-    # 定义四个主要方向：水平、垂直、斜上、斜下
+    # Four main directions: horizontal, vertical, diagonal up, diagonal down
     directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
 
     for dr, dc in directions:
-        # 构建当前方向上的线性序列，长度为11（当前点前后各5个点）
-        line_str =''
+        # Build a string representation for 11 consecutive points (current + 5 on each side)
+        line_str = ''
         for offset in range(-5, 6):
             r = row + dr * offset
             c = col + dc * offset
             if 0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE:
                 cell = board[r][c]
                 if cell == player:
-                    line_str += 'P'  # Player's stone
+                    line_str += 'P'  # Current player's stone
                 elif cell == '':
-                    line_str += 'E'  # Empty
+                    line_str += 'E'  # Empty cell
                 else:
-                    line_str += 'O'  # Opponent's stone or blocked
+                    line_str += 'O'  # Opponent's stone
             else:
-                line_str += 'O'      # Boundary
+                # Outside board boundaries
+                line_str += 'O'
 
-        # 统计五连
+        # Check patterns:
+        # 1) Five in a row
         if 'PPPPP' in line_str:
             pattern_counts['five_in_a_row'] += 1
             continue
 
-        # 统计活四
+        # 2) Open four
         if 'EPPPPE' in line_str:
             pattern_counts['open_four'] += 1
             continue
 
-        # 统计冲四（假设一种模式，需根据实际情况调整）
+        # 3) Closed four
         if 'OPPPPE' in line_str or 'EPPPPO' in line_str:
             pattern_counts['closed_four'] += 1
             continue
 
-        # 统计带间隙的活四
-        # 例如：PP_PP
+        # 4) Four with a gap (e.g. "PP_PP")
         if 'PEPPP' in line_str or 'PPEPP' in line_str or 'PPPEP' in line_str:
             pattern_counts['open_four_with_gap'] += 1
             continue
 
-        # 统计活三
+        # 5) Open three
         if 'EPPPE' in line_str:
             pattern_counts['open_three'] += 1
             continue
 
-        # 统计带间隙的活三
+        # 6) Three with a gap
         if 'EPEPPE' in line_str or 'EPPEPE' in line_str:
             pattern_counts['open_three_with_gap'] += 1
             continue
- 
-        continue
-        # 统计冲三
-        closed_three_pattern = 'OPPPE'
-        if closed_three_pattern in line_str:
-            count = line_str.count('OPPPE')
-            pattern_counts['closed_three'] += count
-            pattern_counts['total_score'] += HEURISTIC_SCORES['CLOSED_THREE'] * count
 
-        # 统计带间隙的冲三
-        closed_three_with_gap_patterns = ['OPPEPO', 'OPEPPO']  # 示例模式
-        for pattern in closed_three_with_gap_patterns:
-            if pattern in line_str:
-                occurrences = line_str.count(pattern)
-                pattern_counts['closed_three_with_gap'] += occurrences
-                pattern_counts['total_score'] += HEURISTIC_SCORES['CLOSED_THREE_WITH_GAP'] * occurrences
+        continue
+
+    # Additional fields for convenience (threat analysis)
     pattern_counts['threat_4'] = pattern_counts['open_four_with_gap'] + pattern_counts['open_four'] + pattern_counts['closed_four']
-    pattern_counts['threat_3'] = pattern_counts['open_three'] +  pattern_counts['open_three_with_gap']
+    pattern_counts['threat_3'] = pattern_counts['open_three'] + pattern_counts['open_three_with_gap']
     return pattern_counts
 
 
 def main():
     """
-    Application entry point. Create the main Tk window and start the Gomoku game.
+    Application entry point.
+    Create the Tkinter root window and start the Gomoku game loop.
     """
     root = tk.Tk()
     game = Gomoku(root)
@@ -1381,5 +1509,5 @@ def main():
 
 
 if __name__ == "__main__":
-    freeze_support()
+    freeze_support()  # For compatibility with multiprocessing on Windows
     main()
