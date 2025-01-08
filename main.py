@@ -38,8 +38,8 @@ INF = float('inf')
 # Each difficulty has a certain number of MCTS simulations and a time limit (in seconds)
 DIFFICULTY_LEVELS = {
     'simple': {'simulations': 500, 'time_limit': 2},
-    'medium': {'simulations': 1000, 'time_limit': 5},
-    'hard': {'simulations': 3000, 'time_limit': 12},
+    'medium': {'simulations': 2000, 'time_limit': 7},
+    'hard': {'simulations': 10000, 'time_limit': 15},
 }
 
 
@@ -546,8 +546,10 @@ class Gomoku:
             self.current_turn = self.ai
             self.update_status()
             self.start_timer()
+            self.perform_ai_move(BOARD_SIZE // 2, BOARD_SIZE // 2)
             # If AI moves first, launch a background thread for AI computations
-            threading.Thread(target=self.ai_move_thread, daemon=True).start()
+            # threading.Thread(target=self.ai_move_thread, daemon=True).start()
+        
 
     def reset_game(self):
         """
@@ -839,6 +841,9 @@ class Gomoku:
         if self.game_over:
             messagebox.showinfo(self.t("no_undo_title"), self.t("game_end_no_undo_message"), parent=self.root)
             return
+        if self.current_turn != self.player:
+            messagebox.showinfo(self.t("no_undo_title"), "对手正在下棋时不能悔棋", parent=self.root)
+            return
 
         # Remove the last move
         last_player, row, col = self.move_history.pop()
@@ -1003,12 +1008,22 @@ def mcts_search(board, ai_player, human_player, simulations, time_limit):
         if move is not None:
             move_scores[move] = move_scores.get(move, 0) + 1
 
+
+    possible_moves = get_possible_moves(board)
+
+    force_moves = get_forced_moves(board, possible_moves, ai_player, ai_player, human_player)
+    if force_moves:
+        if not move_scores:
+            return random.choice(force_moves)
+        force_scores = {}
+        for move in force_moves:
+            force_scores[move] = move_scores.get(move,0)
+            best_move = max(force_scores, key=force_scores.get)
+        return best_move
     # If no moves found by MCTS (very rare) or no expansions, pick a random valid move
     if not move_scores:
-        possible_moves = get_possible_moves(board)
         return random.choice(possible_moves)
-
-    # Otherwise choose the move that appeared the most in the simulations
+   # Otherwise choose the move that appeared the most in the simulations
     best_move = max(move_scores, key=move_scores.get)
     return best_move
 
@@ -1083,7 +1098,14 @@ def simulate(node, ai_player, human_player, end_time):
     # 2) EXPANSION
     possible_moves = get_possible_moves(board)
     if possible_moves and current_node:
-        move = random.choice(possible_moves)
+        # Prioritize forced moves
+        forced_moves = get_forced_moves(board, possible_moves, player, ai_player, human_player)
+        if forced_moves:
+            move = random.choice(forced_moves)
+        else:
+            move = random.choice(possible_moves)
+
+        #move = random.choice(possible_moves)
         board[move[0]][move[1]] = player
         child_node = MCTSNode(
             board=copy.deepcopy(board),
@@ -1116,6 +1138,7 @@ def simulate(node, ai_player, human_player, end_time):
 
         # Randomly pick the next move
         move = random.choice(possible_moves)
+
         board[move[0]][move[1]] = player
 
         # Check again if there's a winner
@@ -1189,6 +1212,163 @@ def get_possible_moves(board):
     if not moves:
         return [(BOARD_SIZE // 2, BOARD_SIZE // 2)]
     return list(moves)
+
+def get_forced_moves(board, amoves, player, ai_player, human_player):
+    """
+    Detect if there are any forced moves (like blocking opponent's FOUR or forming FIVE).
+    Returns a list of such critical moves.
+    """
+    
+    forced_moves = []
+    me_moves = []
+    me_4 = []
+    me_3 = []
+    opponent = human_player if player == ai_player else ai_player
+    for move in amoves:
+        r, c = move
+        board[r][c] = player
+        if check_win(board, move, player):
+            board[r][c] = ''
+            return (move,)
+        else:
+            # Additionally, check if player can create an OPEN FOUR or CLOSED FOUR
+            patterns = count_patterns(board, r, c, player)
+            if patterns['threat_4'] > 0:
+                me_4.append(move)
+            if patterns['threat_3'] > 0:
+                me_3.append(move)           
+            if patterns['open_four'] > 0:
+                me_moves.append(move)
+            elif patterns['threat_4'] + patterns['threat_3'] > 1:
+                forced_moves.append(move)
+        board[r][c] = ''
+    
+    for move in amoves:
+        r, c = move
+        # Simulate opponent making this move to see if it creates a FIVE
+        board[r][c] = opponent
+        if check_win(board, move, opponent):
+            return (move,)
+        else:
+            # Additionally, check if opponent can create an OPEN FOUR or CLOSED FOUR
+            patterns = count_patterns(board, r, c, opponent)
+            if patterns['open_four'] > 0:
+                forced_moves.append(move)
+                forced_moves += me_4
+            elif patterns['threat_4'] + patterns['threat_3'] > 1:
+                if patterns['threat_4'] > 0:
+                    forced_moves.append(move)
+                    forced_moves += me_4
+                else:
+                    forced_moves.append(move)
+                    forced_moves += me_4 + me_3
+ 
+        board[r][c] = ''
+    if me_moves:
+        return list(set(me_moves))
+    return list(set(forced_moves))  # Remove duplicates
+
+
+def count_patterns(board, row, col, player):
+    """
+    统计指定位置（row, col）处玩家的各种棋形（如连珠、活四、冲四、活三、冲三等）。
+    该函数不仅统计连续的棋子，还能识别中间有一个空位的复杂棋形，并判断两端的开放性。
+    
+    返回：
+        {
+            'total_score': int,                  # 总评分
+            'five_in_a_row': int,                # 五连
+            'open_four': int,                    # 活四
+            'closed_four': int,                  # 冲四
+            'open_four_with_gap': int,           # 带间隙的活四
+            'open_three': int,                   # 活三
+            'closed_three': int,                 # 冲三
+            'open_three_with_gap': int,          # 带间隙的活三
+            'closed_three_with_gap': int         # 带间隙的冲三
+        }
+    """
+    # 初始化评分和各种棋形的计数
+    pattern_counts = {
+        'total_score': 0,
+        'five_in_a_row': 0,
+        'open_four': 0,
+        'closed_four': 0,
+        'open_four_with_gap': 0,
+        'open_three': 0,
+        'closed_three': 0,
+        'open_three_with_gap': 0,
+        'closed_three_with_gap': 0
+    }
+
+    # 定义四个主要方向：水平、垂直、斜上、斜下
+    directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
+
+    for dr, dc in directions:
+        # 构建当前方向上的线性序列，长度为11（当前点前后各5个点）
+        line_str =''
+        for offset in range(-5, 6):
+            r = row + dr * offset
+            c = col + dc * offset
+            if 0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE:
+                cell = board[r][c]
+                if cell == player:
+                    line_str += 'P'  # Player's stone
+                elif cell == '':
+                    line_str += 'E'  # Empty
+                else:
+                    line_str += 'O'  # Opponent's stone or blocked
+            else:
+                line_str += 'O'      # Boundary
+
+        # 统计五连
+        if 'PPPPP' in line_str:
+            pattern_counts['five_in_a_row'] += 1
+            continue
+
+        # 统计活四
+        if 'EPPPPE' in line_str:
+            pattern_counts['open_four'] += 1
+            continue
+
+        # 统计冲四（假设一种模式，需根据实际情况调整）
+        if 'OPPPPE' in line_str or 'EPPPPO' in line_str:
+            pattern_counts['closed_four'] += 1
+            continue
+
+        # 统计带间隙的活四
+        # 例如：PP_PP
+        if 'PEPPP' in line_str or 'PPEPP' in line_str or 'PPPEP' in line_str:
+            pattern_counts['open_four_with_gap'] += 1
+            continue
+
+        # 统计活三
+        if 'EPPPE' in line_str:
+            pattern_counts['open_three'] += 1
+            continue
+
+        # 统计带间隙的活三
+        if 'EPEPPE' in line_str or 'EPPEPE' in line_str:
+            pattern_counts['open_three_with_gap'] += 1
+            continue
+ 
+        continue
+        # 统计冲三
+        closed_three_pattern = 'OPPPE'
+        if closed_three_pattern in line_str:
+            count = line_str.count('OPPPE')
+            pattern_counts['closed_three'] += count
+            pattern_counts['total_score'] += HEURISTIC_SCORES['CLOSED_THREE'] * count
+
+        # 统计带间隙的冲三
+        closed_three_with_gap_patterns = ['OPPEPO', 'OPEPPO']  # 示例模式
+        for pattern in closed_three_with_gap_patterns:
+            if pattern in line_str:
+                occurrences = line_str.count(pattern)
+                pattern_counts['closed_three_with_gap'] += occurrences
+                pattern_counts['total_score'] += HEURISTIC_SCORES['CLOSED_THREE_WITH_GAP'] * occurrences
+    pattern_counts['threat_4'] = pattern_counts['open_four_with_gap'] + pattern_counts['open_four'] + pattern_counts['closed_four']
+    pattern_counts['threat_3'] = pattern_counts['open_three'] +  pattern_counts['open_three_with_gap']
+    return pattern_counts
 
 
 def main():
