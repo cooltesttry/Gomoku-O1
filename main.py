@@ -383,9 +383,12 @@ class Gomoku:
         # Default difficulty is set to "medium"
         self.current_difficulty = "medium"
 
-        icon_path = "gomoku.png"  # Path to the game icon
-        icon_image = ImageTk.PhotoImage(Image.open(icon_path))
-        root.iconphoto(False, icon_image)  # Set the window icon
+        try:
+            icon_path = "gomoku.png"  # Path to the game icon
+            icon_image = ImageTk.PhotoImage(Image.open(icon_path))
+            root.iconphoto(False, icon_image)  # Set the window icon
+        except Exception as e:
+            print(f"Error load icon: {e}")
 
         # Set the window title according to the current language
         self.root.title(self.t("title"))
