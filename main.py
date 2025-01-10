@@ -384,7 +384,7 @@ class Gomoku:
         self.current_difficulty = "medium"
 
         try:
-            icon_path = "gomoku.png"  # Path to the game icon
+            icon_path = resource_path("gomoku.png")  # Path to the game icon
             icon_image = ImageTk.PhotoImage(Image.open(icon_path))
             root.iconphoto(False, icon_image)  # Set the window icon
         except Exception as e:
@@ -613,12 +613,13 @@ class Gomoku:
             )
             self.hint_shapes.append(shape_id)
 
+        '''
         # If no hints are available, show a message
         if not pattern_info_me and not pattern_info_opponent:
             messagebox.showinfo(self.t("hint_button"), self.t("no_hint_available"), parent=self.root)
             return
 
-        '''
+        
 
 
         # Draw green circles for opportunities
