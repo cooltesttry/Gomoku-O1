@@ -12,6 +12,7 @@ import math  # Mathematical functions, e.g., for sqrt or log
 import threading  # For running AI computations in separate threads
 import queue  # A thread-safe queue to communicate between threads
 import sys  # Access to system-specific parameters and functions
+from array import array  # Efficient arrays of numeric values for board states
 
 def resource_path(relative_path):
     """Get the absolute path of the resource file"""
@@ -24,7 +25,6 @@ def resource_path(relative_path):
         # Running in normal mode
         current_directory = os.path.dirname(os.path.abspath(__file__))
         return os.path.join(current_directory, relative_path)
-
 
 # ---------------------------
 # Global Constants
@@ -47,6 +47,114 @@ DIFFICULTY_LEVELS = {
     'medium': {'simulations': 1200, 'time_limit': 7},
     'hard': {'simulations': 4000, 'time_limit': 15},
 }
+
+DIRECTIONS = [(1, 0), (0, 1), (1, 1), (1, -1)]
+FIVE_IN_A_ROW = 0
+OPEN_FOUR = 1
+FOUR_WITH_GAP = 2
+CLOSED_FOUR = 3
+OPEN_THREE = 4
+OPEN_THREE_WITH_GAP = 5
+OPEN_TWO = 6
+OPEN_TWO_WITH_GAP = 7
+
+def check_pattern(arr , row, col, player):
+    """
+    Check if placing 'player' stone at (row, col) results in a five-in-a-row (horizontal, vertical, diagonals).
+    """
+    pattern = [0, 0, 0, 0, 0, 0, 0, 0]
+    for dr, dc in DIRECTIONS:
+        count = 1
+        e1 = False
+        e2 = False
+        count1 = 0
+        count2 = 0
+        k1 = 0
+        k2 = 0
+        # Forward direction
+        r, c = row + dr, col + dc
+        while 0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE:
+            if arr[r][c] == player and k1 == 0:
+                count += 1
+            elif arr[r][c] == 0 and k1 == 0:
+                k1 = 1
+                e1 = True
+            elif arr[r][c] == player and k1 == 1:
+                count1 += 1
+                e1 = False
+            elif arr[r][c] == 0 and k1 == 1:
+                e1 = True
+                break
+            else:
+                break
+            r += dr
+            c += dc
+        # Reverse direction
+        r, c = row - dr, col - dc
+        while 0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE:
+            if arr[r][c] == player and k2 == 0:
+                count += 1
+            elif arr[r][c] == 0 and k2 == 0:
+                k2 = 1
+                e2 = True
+            elif arr[r][c] == player and k2 == 1:
+                count2 += 1
+                e2 = False
+            elif arr[r][c] == 0 and k2 == 1:
+                e2 = True
+                break
+            else:
+                break
+            r -= dr
+            c -= dc
+        
+        
+        if count >= 5:
+            pattern[FIVE_IN_A_ROW] = 1
+            return pattern
+        
+        if count >2 and player == -1:
+            pass
+        
+        match (count1>0)+(count2>0):
+            case 0:
+                if count == 4 and e1 and e2:
+                    pattern[OPEN_FOUR] += 1
+                elif count == 4 and (e1 or e2):
+                    pattern[CLOSED_FOUR] += 1
+                elif count == 3 and e1 and e2:
+                    pattern[OPEN_THREE] += 1
+                elif count == 2 and (e1 or e2):
+                    pattern[OPEN_TWO] += 1
+            case 1:
+                if count == 4:
+                    if (count1 > 0 or e1) and (count2 > 0 or e2):
+                        pattern[OPEN_FOUR] += 1
+                    else:
+                        pattern[CLOSED_FOUR] += 1
+                elif count + count1 + count2  > 3:
+                    if (count1==1 and e2) or (count2==1 and e1) or (e2 and e1):
+                        pattern[FOUR_WITH_GAP] += 1
+                    else:
+                        pattern[CLOSED_FOUR] += 1
+                elif count + count1 + count2 == 3 and e1 and e2:
+                    pattern[OPEN_THREE_WITH_GAP] += 1
+                elif count + count1 + count2 == 2 and (e1 or e2):
+                    pattern[OPEN_TWO_WITH_GAP] += 1
+            case 2:
+                if count+count1 > 3 and count+count2 > 3:
+                    pattern[OPEN_FOUR] += 1
+                elif count+count1 > 3 or count+count2 > 3:
+                    if (count1 > 2 and e1) or (count2 > 2 and e2) or (e1 and e2):
+                        pattern[FOUR_WITH_GAP] += 1
+                    else:
+                        pattern[CLOSED_FOUR] += 1
+                elif (count + count1 > 2 and e1) or (count + count2 > 2 and e2):
+                    pattern[OPEN_THREE_WITH_GAP] += 1 
+                else:
+                    pattern[OPEN_TWO_WITH_GAP] += 1
+        
+    return pattern
 
 
 class Gomoku:
@@ -425,12 +533,12 @@ class Gomoku:
         self.ai_start_time = None
 
         # 15x15 board data structure: each cell can be 'black', 'white', or '' (empty)
-        self.board = [['' for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
+        self.board = [array('b', [0] * BOARD_SIZE) for _ in range(BOARD_SIZE)]
 
         # Game over flag
         self.game_over = False
         # Current turn: 'black' or 'white'
-        self.current_turn = 'black'
+        self.current_turn = 1
         # Move history for undo functionality
         self.move_history = []
         # Highlight shape ID for the last move
@@ -486,11 +594,29 @@ class Gomoku:
         pattern_info = get_hints(self.board, self.current_turn, self.ai, self.player)
         pattern_info_me = pattern_info[0]
         pattern_info_opponent = pattern_info[1]
+        pattern_info_score = pattern_info[2]
         
+
+        '''
+        # Draw score
+        for ([r, c], value) in pattern_info_score:
+            x1, y1 = self.board_to_pixel(r, c)
+            shape_id = self.canvas.create_text(
+                x1, y1,
+                text=str(value),
+                fill="blue",
+                font=("Arial", 10, "bold"),
+                tags="score"
+            )
+            self.hint_shapes.append(shape_id)
+
         # If no hints are available, show a message
         if not pattern_info_me and not pattern_info_opponent:
             messagebox.showinfo(self.t("hint_button"), self.t("no_hint_available"), parent=self.root)
             return
+
+        '''
+
 
         # Draw green circles for opportunities
         for ([r, c], value) in pattern_info_me:
@@ -641,14 +767,14 @@ class Gomoku:
             parent=self.root
         )
         if answer == 'yes':
-            self.player = 'black'
-            self.ai = 'white'
+            self.player = 1
+            self.ai = -1
             self.current_turn = self.player
             self.update_status()
             self.start_timer()
         else:
-            self.player = 'white'
-            self.ai = 'black'
+            self.player = -1
+            self.ai = 1
             self.current_turn = self.ai
             self.update_status()
             self.start_timer()
@@ -659,11 +785,11 @@ class Gomoku:
         """
         Reset the board state and UI, then prompt the user which side to play.
         """
-        self.board = [['' for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
+        self.board = [array('b', [0] * BOARD_SIZE) for _ in range(BOARD_SIZE)]
         self.canvas.delete("all")
         self.draw_board()
         self.game_over = False
-        self.current_turn = 'black'
+        self.current_turn = 1
         self.move_history.clear()
         if self.highlight:
             self.canvas.delete(self.highlight)
@@ -772,7 +898,7 @@ class Gomoku:
         # If the click is out of range or cell is occupied, ignore
         if row < 0 or row >= BOARD_SIZE or col < 0 or col >= BOARD_SIZE:
             return
-        if self.board[row][col] != '':
+        if self.board[row][col] != 0:
             return
 
         # Place the stone for the player
@@ -782,11 +908,23 @@ class Gomoku:
         self.stop_timer()
 
         # Check if the player has won
-        if self.check_win(row, col, self.player):
+        if check_win(self.board, (row, col), self.player):
             messagebox.showinfo(self.t("game_over_title"), self.t("game_over_win"), parent=self.root)
             self.game_over = True
             return
+        
+        start = time.time()
+        '''
+        for _ in range(100000):
+            check_win(self.board, (row, col), 1)
+        end = time.time()
+        print("1 耗时:", end - start)
 
+        for _ in range(100000):
+            self.check_win(row, col, 1)
+        end = time.time()
+        print("1 耗时:", end - start)
+        '''
         # Switch turn to AI
         self.current_turn = self.ai
         self.update_status()
@@ -842,7 +980,7 @@ class Gomoku:
         self.stop_timer()
 
         # Check if AI wins
-        if self.check_win(row, col, self.ai):
+        if check_win(self.board, (row, col), self.ai):
             messagebox.showinfo(self.t("game_over_title"), self.t("game_over_lose"), parent=self.root)
             self.game_over = True
             return
@@ -872,7 +1010,7 @@ class Gomoku:
         """
         self.board[row][col] = player
         x, y = self.board_to_pixel(row, col)
-        self.draw_3d_stone(x, y, 'black' if player == 'black' else 'white')
+        self.draw_3d_stone(x, y, 1 if player == 1 else -1)
 
     def board_to_pixel(self, row, col):
         """
@@ -891,12 +1029,12 @@ class Gomoku:
         self.canvas.create_oval(
             x - STONE_RADIUS, y - STONE_RADIUS,
             x + STONE_RADIUS, y + STONE_RADIUS,
-            fill='black' if color == 'black' else '#EEEEEE',
+            fill='black' if color == 1 else '#EEEEEE',
             outline='',
             tags="stone"
         )
         # Highlight region for a 3D effect
-        if color == 'black':
+        if color == 1:
             highlight_color = '#AAAAAA'
         else:
             highlight_color = '#FFFFFF'
@@ -908,7 +1046,7 @@ class Gomoku:
             tags="stone"
         )
         # Shadow region for a 3D effect
-        shadow_color = '#555555' if color == 'black' else '#E0E0E0'
+        shadow_color = '#555555' if color == 1 else '#E0E0E0'
         self.canvas.create_oval(
             x + STONE_RADIUS - 10, y + STONE_RADIUS - 10,
             x + STONE_RADIUS - 5, y + STONE_RADIUS - 5,
@@ -917,28 +1055,6 @@ class Gomoku:
             tags="stone"
         )
 
-    def check_win(self, row, col, player):
-        """
-        Check if placing 'player' stone at (row, col) results in a five-in-a-row (horizontal, vertical, diagonals).
-        """
-        directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
-        for dr, dc in directions:
-            count = 1
-            # Forward direction
-            r, c = row + dr, col + dc
-            while 0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE and self.board[r][c] == player:
-                count += 1
-                r += dr
-                c += dc
-            # Reverse direction
-            r, c = row - dr, col - dc
-            while 0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE and self.board[r][c] == player:
-                count += 1
-                r -= dr
-                c -= dc
-            if count >= 5:
-                return True
-        return False
 
     def find_best_move(self):
         """
@@ -963,14 +1079,14 @@ class Gomoku:
 
         # Remove the last move from history
         last_player, row, col = self.move_history.pop()
-        self.board[row][col] = ''
+        self.board[row][col] = 0
         self.redraw_board()
         self.highlight_last_move()
 
         # If the last move was AI's move, also remove the player's previous move
         if last_player == self.ai and self.move_history:
             last_player, row, col = self.move_history.pop()
-            self.board[row][col] = ''
+            self.board[row][col] = 0
             self.redraw_board()
             self.highlight_last_move()
 
@@ -1015,7 +1131,7 @@ class Gomoku:
         """
         Update the status label to display the current player's turn.
         """
-        current_player = self.t("black_label") if self.current_turn == 'black' else self.t("white_label")
+        current_player = self.t("black_label") if self.current_turn == 1 else self.t("white_label")
         self.current_player_label.config(text=f"{self.t('current_player_prefix')}{current_player}")
 
     def start_timer(self):
@@ -1124,8 +1240,9 @@ def mcts_search(board, ai_player, human_player, simulations, time_limit):
     # Get all possible moves
     possible_moves = get_possible_moves(board)
 
+    
     # Check for forced moves (e.g. immediate winning or blocking)
-    force_moves = get_forced_moves(board, possible_moves, ai_player, ai_player, human_player)
+    force_moves , scores = get_forced_moves(board, possible_moves, ai_player)
     if force_moves:
         # If there are forced moves and no moves in move_scores, pick one
         if not move_scores:
@@ -1140,7 +1257,7 @@ def mcts_search(board, ai_player, human_player, simulations, time_limit):
     # If MCTS did not yield any expansions (very rare), pick a random move
     if not move_scores:
         return random.choice(possible_moves)
-
+    
     # Otherwise, choose the move that was most frequent in the simulations
     best_move = max(move_scores, key=move_scores.get)
     return best_move
@@ -1160,13 +1277,15 @@ class MCTSNode:
         self.parent = parent
         self.children = {}                # A dictionary of move -> MCTSNode
         self.wins = 0                     # Accumulated wins (for AI) during backprop
-        self.visits = 0                   # Number of visits for this node
+        self.visits = 0
+        self.goodmove = get_good_moves(self.board,self.player)                  # Number of visits for this node
+        self.movelen = len(self.goodmove)
 
     def is_fully_expanded(self):
         """
         Return True if all possible moves from this board state have been expanded.
         """
-        return len(self.children) == len(get_possible_moves(self.board))
+        return len(self.children) == self.movelen
 
     def best_child(self, c_param=1.414):
         """
@@ -1212,24 +1331,24 @@ def simulate(node, ai_player, human_player, end_time):
             break
 
     # 2) EXPANSION
-    possible_moves = get_possible_moves(board)
+    possible_moves = current_node.goodmove
     if possible_moves and current_node:
-        forced_moves = get_forced_moves(board, possible_moves, player, ai_player, human_player)
-        if forced_moves:
-            move = random.choice(forced_moves)
-        else:
-            move = random.choice(possible_moves)
+        move = random.choice(possible_moves)
 
         board[move[0]][move[1]] = player
-        child_node = MCTSNode(
-            board=copy.deepcopy(board),
-            player=ai_player if player == human_player else human_player,
-            ai_player=ai_player,
-            human_player=human_player,
-            move=move,
-            parent=current_node
-        )
-        current_node.children[move] = child_node
+        if move not in current_node.children:
+
+            child_node = MCTSNode(
+                board=copy.deepcopy(board),
+                player=ai_player if player == human_player else human_player,
+                ai_player=ai_player,
+                human_player=human_player,
+                move=move,
+                parent=current_node
+            )
+            current_node.children[move] = child_node
+        else:
+            child_node = current_node.children[move]
         player = ai_player if player == human_player else human_player
     else:
         move = None
@@ -1277,6 +1396,17 @@ def simulate(node, ai_player, human_player, end_time):
 
     return move
 
+def get_good_moves(board, player):
+    moves=get_possible_moves(board)
+    if moves:
+        forced_moves, scores = get_forced_moves(board, moves, player, True)
+        if forced_moves:
+            moves = forced_moves
+        moves.sort(key=lambda x: scores[x])
+        filtered_moves = [move for move in moves if scores[move] > 0]
+    if filtered_moves:
+        return filtered_moves
+    return moves
 
 def check_win(board, move, player):
     """
@@ -1285,9 +1415,8 @@ def check_win(board, move, player):
     """
     if move is None:
         return False
-    directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
     row, col = move
-    for dr, dc in directions:
+    for dr, dc in DIRECTIONS:
         count = 1
         # Forward direction
         r, c = row + dr, col + dc
@@ -1314,12 +1443,12 @@ def get_possible_moves(board):
     moves = set()
     for row in range(BOARD_SIZE):
         for col in range(BOARD_SIZE):
-            if board[row][col] != '':
+            if board[row][col] != 0:
                 # For each occupied cell, add empty cells in a 2-cell radius to 'moves'
                 for dr in range(-2, 3):
                     for dc in range(-2, 3):
                         r, c = row + dr, col + dc
-                        if 0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE and board[r][c] == '':
+                        if 0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE and board[r][c] == 0:
                             moves.add((r, c))
     if not moves:
         return [(BOARD_SIZE // 2, BOARD_SIZE // 2)]
@@ -1336,33 +1465,41 @@ def get_hints(board, player, ai_player, human_player):
     """
     player_hints = []
     opponent_hints = []
+    scores = []
     possible_move = get_possible_moves(board)
     opponent = human_player if player == ai_player else ai_player
     for move in possible_move:
         r, c = move
         # Temporarily place player's stone
-        board[r][c] = player
-        patterns = count_patterns(board, r, c, player)
-        threats = patterns["five_in_a_row"] + patterns["open_four"] + patterns["open_four_with_gap"] + patterns["open_three"] + patterns["open_three_with_gap"]
+        
+        patterns = check_pattern(board, r, c, player)
+        play_score = patterns[FIVE_IN_A_ROW] * 1000 + patterns[OPEN_FOUR] * 100 + patterns[FOUR_WITH_GAP] * 50 + patterns[CLOSED_FOUR] * 20 + patterns[OPEN_THREE] * 10 + patterns[OPEN_THREE_WITH_GAP] * 5 + patterns[OPEN_TWO] * 2 + patterns[OPEN_TWO_WITH_GAP]
+        threats = patterns[FIVE_IN_A_ROW] + patterns[OPEN_FOUR] + patterns[FOUR_WITH_GAP] + patterns[OPEN_THREE] + patterns[OPEN_THREE_WITH_GAP]+ patterns[CLOSED_FOUR] 
+        
+        
         # If we detect strong patterns, record them as opportunities
         if threats > 0:
             # 'value' determines the size of the marker
-            player_hints.append([move, 1 if patterns["five_in_a_row"] + patterns["open_four"] > 0 or threats + patterns["closed_four"] > 1 else 0.6])
-        board[r][c] = ''
+            player_hints.append([move, 1 if patterns[FIVE_IN_A_ROW] + patterns[OPEN_FOUR] > 0 or threats > 1 else 0.6])
+        
 
         # Temporarily place opponent's stone
-        board[r][c] = opponent
-        patterns = count_patterns(board, r, c, opponent)
+        
+        patterns = check_pattern(board, r, c, opponent)
+        opp_score = patterns[FIVE_IN_A_ROW] * 1000 + patterns[OPEN_FOUR] * 100 + patterns[FOUR_WITH_GAP] * 50 + patterns[CLOSED_FOUR] * 20 + patterns[OPEN_THREE] * 10 + patterns[OPEN_THREE_WITH_GAP] * 5 + patterns[OPEN_TWO] * 2 + patterns[OPEN_TWO_WITH_GAP]
+
         # If the opponent has strong patterns, we consider them threats
-        if patterns['threat_4'] + patterns['threat_3'] > 1 or patterns['open_four'] > 0 or patterns["five_in_a_row"] > 0:
+        if sum (patterns[:6])> 1 or patterns[OPEN_FOUR] > 0 or patterns[FIVE_IN_A_ROW] > 0:
             opponent_hints.append([move, 1])
-        elif patterns['open_three'] > 0:
+        elif patterns[OPEN_THREE] > 0:
             opponent_hints.append([move, 0.6])
-        board[r][c] = ''
-    return [player_hints, opponent_hints]
+            
+        scores.append([move, play_score + opp_score])
+        
+    return [player_hints, opponent_hints, scores]
 
 
-def get_forced_moves(board, amoves, player, ai_player, human_player):
+def get_forced_moves(board, amoves, player, calcscore=False):
     """
     Identify forced moves such as:
     - immediate win
@@ -1374,128 +1511,62 @@ def get_forced_moves(board, amoves, player, ai_player, human_player):
     me_moves = []
     me_4 = []
     me_3 = []
-    opponent = human_player if player == ai_player else ai_player
+    o_5=[]
+    o_4=[]
+    o_3=[]
+    o_threat=0
+    scores = {}
+    opponent = -player # Opponent's stone
     for move in amoves:
         r, c = move
-        board[r][c] = player
-        patterns = count_patterns(board, r, c, player)
+        
+        patterns = check_pattern(board, r, c, player)
+        if calcscore:
+            scores[move] = scores.get(move,0) + patterns[FIVE_IN_A_ROW] * 1000 + patterns[OPEN_FOUR] * 100 + patterns[FOUR_WITH_GAP] * 50 + patterns[CLOSED_FOUR] * 20 + patterns[OPEN_THREE] * 10 + patterns[OPEN_THREE_WITH_GAP] * 5 + patterns[OPEN_TWO] * 2 + patterns[OPEN_TWO_WITH_GAP]
         # If this move gives immediate five-in-a-row, return immediately
-        if patterns['five_in_a_row'] > 0:
-            board[r][c] = ''
-            return (move,)
+        if patterns[FIVE_IN_A_ROW] > 0:
+        
+            return [move,],scores
         else:
             # Check for open_four, threat_4, threat_3, etc.
-            if patterns['threat_4'] > 0:
+            threat_4 = patterns[OPEN_FOUR] + patterns[FOUR_WITH_GAP] + patterns[CLOSED_FOUR]
+            threat_3 = patterns[OPEN_THREE] + patterns[OPEN_THREE_WITH_GAP]
+            if threat_4 > 0:
                 me_4.append(move)
-            if patterns['threat_3'] > 0:
+            if threat_3 > 0:
                 me_3.append(move)
-            if patterns['open_four'] > 0:
+            if patterns[OPEN_FOUR] > 0:
                 me_moves.append(move)
-            elif patterns['threat_4'] + patterns['threat_3'] > 1:
+            elif threat_4 + threat_3 > 1:
                 forced_moves.append(move)
-        board[r][c] = ''
-    
-    for move in amoves:
-        r, c = move
-        # Simulate opponent's move
-        board[r][c] = opponent
-        patterns = count_patterns(board, r, c, opponent)
-        if patterns['five_in_a_row'] > 0:
-            return (move,)
-        else:
+      
+        patterns = check_pattern(board, r, c, opponent)
+        if calcscore:
+            scores[move] = scores.get(move,0) + patterns[FIVE_IN_A_ROW] * 1000 + patterns[OPEN_FOUR] * 100 + patterns[FOUR_WITH_GAP] * 50 + patterns[CLOSED_FOUR] * 20 + patterns[OPEN_THREE] * 10 + patterns[OPEN_THREE_WITH_GAP] * 5 + patterns[OPEN_TWO] * 2 + patterns[OPEN_TWO_WITH_GAP]
+
+        threat_4 = patterns[OPEN_FOUR] + patterns[FOUR_WITH_GAP] + patterns[CLOSED_FOUR]
+        threat_3 = patterns[OPEN_THREE] + patterns[OPEN_THREE_WITH_GAP]
+ 
+        if patterns[FIVE_IN_A_ROW] > 0:
+            o_5.append(move)
+            o_threat=5
+        elif o_threat < 5:
             # If opponent can form open_four or multiple threats, add to forced moves
-            if patterns['open_four'] > 0:
-                forced_moves.append(move)
-                forced_moves += me_4
-            elif patterns['threat_4'] + patterns['threat_3'] > 1:
-                if patterns['threat_4'] > 0:
-                    forced_moves.append(move)
-                    forced_moves += me_4
-                else:
-                    forced_moves.append(move)
-                    forced_moves += me_4 + me_3
-        board[r][c] = ''
-    if me_moves:
-        return list(set(me_moves))
-    return list(set(forced_moves))  # Remove duplicates
-
-
-def count_patterns(board, row, col, player):
-    """
-    Count various pattern types (five-in-a-row, open four, closed four, etc.)
-    around the position (row, col) for the given 'player'.
-    This function returns a dictionary with the pattern counts.
-    """
-    pattern_counts = {
-        'total_score': 0,
-        'five_in_a_row': 0,
-        'open_four': 0,
-        'closed_four': 0,
-        'open_four_with_gap': 0,
-        'open_three': 0,
-        'closed_three': 0,
-        'open_three_with_gap': 0,
-        'closed_three_with_gap': 0
-    }
-
-    # Four main directions: horizontal, vertical, diagonal up, diagonal down
-    directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
-
-    for dr, dc in directions:
-        # Build a string representation for 11 consecutive points (current + 5 on each side)
-        line_str = ''
-        for offset in range(-5, 6):
-            r = row + dr * offset
-            c = col + dc * offset
-            if 0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE:
-                cell = board[r][c]
-                if cell == player:
-                    line_str += 'P'  # Current player's stone
-                elif cell == '':
-                    line_str += 'E'  # Empty cell
-                else:
-                    line_str += 'O'  # Opponent's stone
-            else:
-                # Outside board boundaries
-                line_str += 'O'
-
-        # Check patterns:
-        # 1) Five in a row
-        if 'PPPPP' in line_str:
-            pattern_counts['five_in_a_row'] += 1
-            continue
-
-        # 2) Open four
-        if 'EPPPPE' in line_str:
-            pattern_counts['open_four'] += 1
-            continue
-
-        # 3) Closed four
-        if 'OPPPPE' in line_str or 'EPPPPO' in line_str:
-            pattern_counts['closed_four'] += 1
-            continue
-
-        # 4) Four with a gap (e.g. "PP_PP")
-        if 'PEPPP' in line_str or 'PPEPP' in line_str or 'PPPEP' in line_str:
-            pattern_counts['open_four_with_gap'] += 1
-            continue
-
-        # 5) Open three
-        if 'EPPPE' in line_str:
-            pattern_counts['open_three'] += 1
-            continue
-
-        # 6) Three with a gap
-        if 'EPEPPE' in line_str or 'EPPEPE' in line_str:
-            pattern_counts['open_three_with_gap'] += 1
-            continue
-
-        continue
-
-    # Additional fields for convenience (threat analysis)
-    pattern_counts['threat_4'] = pattern_counts['open_four_with_gap'] + pattern_counts['open_four'] + pattern_counts['closed_four']
-    pattern_counts['threat_3'] = pattern_counts['open_three'] + pattern_counts['open_three_with_gap']
-    return pattern_counts
+            if patterns[OPEN_FOUR] > 0 or (threat_4 + threat_3 > 1 and threat_4 > 0):
+                o_4.append(move)
+                o_threat=4
+            elif threat_3 > 1 and o_threat<4:
+                o_3.append(move)
+                o_threat=3
+    if o_threat==5:
+        return o_5,scores
+    elif me_moves:
+        return me_moves,scores
+    elif o_threat==4:
+        return list(set(forced_moves + o_4 + me_4)),scores
+    elif o_threat==3:
+        return list(set(forced_moves + o_4 + o_3 + me_4 + me_3)),scores
+    return list(set(forced_moves)), scores  # Remove duplicates
 
 
 def main():
